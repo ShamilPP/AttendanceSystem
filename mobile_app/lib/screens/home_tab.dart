@@ -6,12 +6,18 @@ import 'package:provider/provider.dart';
 import '../models/attendance.dart';
 import '../providers/attendance_provider.dart';
 import '../providers/auth_provider.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
 import '../utils/formatters.dart';
+import '../widgets/app_avatar.dart';
+import '../widgets/app_button.dart';
+import '../widgets/app_card.dart';
 import '../widgets/status_chip.dart';
 import 'scan_screen.dart';
 import 'summary_screen.dart';
 
-/// Greeting, live today card, and the four scan actions.
+/// The hero screen: gradient greeting header, a live attendance status card,
+/// the single context-aware action button, and a check-in/out timeline.
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
 
@@ -29,7 +35,9 @@ class _HomeTabState extends State<HomeTab> {
       if (mounted) context.read<AttendanceProvider>().loadToday();
     });
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
+      if (mounted && context.read<AttendanceProvider>().today?.isWorking == true) {
+        setState(() {});
+      }
     });
   }
 
@@ -50,46 +58,35 @@ class _HomeTabState extends State<HomeTab> {
   Future<void> _showSuccessSheet(
       AttendanceAction action, ScanOutcome outcome) async {
     final attendance = outcome.attendance;
-    DateTime? when;
-    switch (action) {
-      case AttendanceAction.checkIn:
-        when = attendance?.checkIn;
-      case AttendanceAction.checkOut:
-        when = attendance?.checkOut;
-      case AttendanceAction.breakStart:
-        when = attendance?.openBreak?.start ??
-            (attendance != null && attendance.breaks.isNotEmpty
-                ? attendance.breaks.last.start
-                : null);
-      case AttendanceAction.breakEnd:
-        when = attendance != null && attendance.breaks.isNotEmpty
-            ? attendance.breaks.last.end
-            : null;
-    }
-    when ??= DateTime.now();
+    final DateTime when = (action == AttendanceAction.checkIn
+            ? attendance?.checkIn
+            : attendance?.checkOut) ??
+        DateTime.now();
+    final accent = action == AttendanceAction.checkIn
+        ? AppColors.success
+        : AppColors.danger;
 
     await showModalBottomSheet<void>(
       context: context,
-      showDragHandle: true,
       builder: (sheetContext) {
         final scheme = Theme.of(sheetContext).colorScheme;
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+            padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xxl, 0, AppSpacing.xxl, AppSpacing.xxl),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 64,
-                  height: 64,
+                  width: 76,
+                  height: 76,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2E7D32).withValues(alpha: 0.14),
+                    color: accent.withValues(alpha: AppColors.tint),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.check_rounded,
-                      size: 40, color: Color(0xFF2E7D32)),
+                  child: Icon(Icons.check_rounded, size: 46, color: accent),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: AppSpacing.lg),
                 Text(
                   '${action.label} successful',
                   style: Theme.of(sheetContext)
@@ -97,7 +94,7 @@ class _HomeTabState extends State<HomeTab> {
                       .titleLarge
                       ?.copyWith(fontWeight: FontWeight.w700),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpacing.xs),
                 Text(
                   formatDateTime(when),
                   style: Theme.of(sheetContext)
@@ -105,11 +102,11 @@ class _HomeTabState extends State<HomeTab> {
                       .bodyMedium
                       ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpacing.md),
                 if (attendance != null)
                   Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
                     alignment: WrapAlignment.center,
                     children: [
                       StatusChip.attendance(attendance.status),
@@ -117,29 +114,33 @@ class _HomeTabState extends State<HomeTab> {
                           action == AttendanceAction.checkIn)
                         const StatusChip(
                             label: 'Marked late',
-                            color: Color(0xFFEF6C00)),
+                            color: AppColors.warning,
+                            icon: Icons.warning_amber_rounded),
                       if (attendance.isEarlyOut &&
                           action == AttendanceAction.checkOut)
                         const StatusChip(
                             label: 'Early check-out',
-                            color: Color(0xFFEF6C00)),
+                            color: AppColors.warning,
+                            icon: Icons.warning_amber_rounded),
+                      if (action == AttendanceAction.checkOut)
+                        StatusChip(
+                            label: 'Worked ${formatMinutes(attendance.workMinutes)}',
+                            color: AppColors.info,
+                            icon: Icons.timer_outlined),
                     ],
                   ),
                 if (outcome.message.isNotEmpty) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpacing.md),
                   Text(
                     outcome.message,
                     textAlign: TextAlign.center,
                     style: Theme.of(sheetContext).textTheme.bodyMedium,
                   ),
                 ],
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () => Navigator.of(sheetContext).pop(),
-                    child: const Text('Done'),
-                  ),
+                const SizedBox(height: AppSpacing.xl),
+                AppButton(
+                  label: 'Done',
+                  onPressed: () => Navigator.of(sheetContext).pop(),
                 ),
               ],
             ),
@@ -154,70 +155,82 @@ class _HomeTabState extends State<HomeTab> {
     final auth = context.watch<AuthProvider>();
     final attendance = context.watch<AttendanceProvider>();
     final now = DateTime.now();
+    final topInset = MediaQuery.of(context).padding.top;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Attendance'),
-        actions: [
-          IconButton(
-            tooltip: 'Monthly summary',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                    builder: (_) => const SummaryScreen()),
-              );
-            },
-            icon: const Icon(Icons.insights_rounded),
-          ),
-        ],
-      ),
       body: RefreshIndicator(
         onRefresh: () => context.read<AttendanceProvider>().loadToday(),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          padding: EdgeInsets.zero,
           children: [
-            Text(
-              '${greetingFor(now)}, ${auth.user?.firstName ?? 'there'}',
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.w700),
+            _GreetingHeader(
+              name: auth.user?.firstName ?? 'there',
+              fullName: auth.user?.name ?? '',
+              now: now,
+              topInset: topInset,
+              onSummary: _openSummary,
             ),
-            const SizedBox(height: 2),
-            Text(
-              formatFullDate(now),
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: 20),
-            _TodayCard(provider: attendance, now: now),
-            const SizedBox(height: 20),
-            Text(
-              'Actions',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 10),
-            _ActionGrid(provider: attendance, onAction: _startAction),
-            const SizedBox(height: 16),
-            Card(
-              margin: EdgeInsets.zero,
-              clipBehavior: Clip.antiAlias,
-              child: ListTile(
-                leading: const Icon(Icons.insights_rounded),
-                title: const Text('Monthly summary'),
-                subtitle:
-                    const Text('Working days, hours and attendance stats'),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                        builder: (_) => const SummaryScreen()),
-                  );
-                },
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg, AppSpacing.xl, AppSpacing.lg, AppSpacing.xxl),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _StatusCard(provider: attendance, now: now),
+                  const SizedBox(height: AppSpacing.lg),
+                  _ActionSection(
+                    provider: attendance,
+                    onAction: _startAction,
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  AppCard(
+                    onTap: _openSummary,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color:
+                                AppColors.seed.withValues(alpha: AppColors.tint),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.insights_rounded,
+                              color: AppColors.seed),
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Monthly summary',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleSmall
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                              Text(
+                                'Working days, hours & attendance stats',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right_rounded),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -225,194 +238,249 @@ class _HomeTabState extends State<HomeTab> {
       ),
     );
   }
-}
 
-class _TodayCard extends StatelessWidget {
-  const _TodayCard({required this.provider, required this.now});
-
-  final AttendanceProvider provider;
-  final DateTime now;
-
-  String _stateLabel(Attendance? a) {
-    if (a == null || a.checkIn == null) {
-      if (a?.status == AttendanceStatus.onLeave) return 'On leave today';
-      return 'Not checked in yet';
-    }
-    if (a.checkOut != null) return 'Checked out';
-    if (a.hasOpenBreak) return 'On break';
-    return 'Working';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final a = provider.today;
-
-    Widget content;
-    if (provider.todayLoading && !provider.todayLoaded) {
-      content = const Padding(
-        padding: EdgeInsets.all(32),
-        child: Center(child: CircularProgressIndicator()),
-      );
-    } else if (provider.todayError != null && !provider.todayLoaded) {
-      content = Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Text(
-              provider.todayError!,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: scheme.error),
-            ),
-            const SizedBox(height: 10),
-            FilledButton.tonalIcon(
-              onPressed: provider.loadToday,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Retry'),
-            ),
-          ],
-        ),
-      );
-    } else {
-      final utcNow = now.toUtc();
-      final worked = a?.liveWorkDuration(utcNow) ?? Duration.zero;
-      final onBreak = a?.liveBreakDuration(utcNow) ?? Duration.zero;
-      content = Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _stateLabel(a),
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                ),
-                if (a != null) StatusChip.attendance(a.status),
-              ],
-            ),
-            if (a != null && (a.isLate || a.isEarlyOut)) ...[
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                children: [
-                  if (a.isLate)
-                    const StatusChip(
-                        label: 'Late arrival',
-                        color: Color(0xFFEF6C00),
-                        dense: true),
-                  if (a.isEarlyOut)
-                    const StatusChip(
-                        label: 'Early check-out',
-                        color: Color(0xFFEF6C00),
-                        dense: true),
-                ],
-              ),
-            ],
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                _TimeCell(
-                  label: 'Check-in',
-                  value: formatTime(a?.checkIn),
-                  icon: Icons.login_rounded,
-                ),
-                _TimeCell(
-                  label: 'Check-out',
-                  value: formatTime(a?.checkOut),
-                  icon: Icons.logout_rounded,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                _TimeCell(
-                  label: 'Worked',
-                  value: a?.checkIn == null
-                      ? '—'
-                      : (a!.checkOut != null
-                          ? formatMinutes(a.workMinutes)
-                          : formatLiveDuration(worked)),
-                  icon: Icons.timer_outlined,
-                  highlight: a?.checkIn != null && a?.checkOut == null,
-                ),
-                _TimeCell(
-                  label: 'Break',
-                  value: a == null || a.checkIn == null
-                      ? '—'
-                      : (a.checkOut != null
-                          ? formatMinutes(a.breakMinutes)
-                          : formatLiveDuration(onBreak)),
-                  icon: Icons.coffee_outlined,
-                  highlight: a?.hasOpenBreak ?? false,
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Card(
-      margin: EdgeInsets.zero,
-      elevation: 0,
-      color: scheme.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: content,
+  void _openSummary() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const SummaryScreen()),
     );
   }
 }
 
-class _TimeCell extends StatelessWidget {
-  const _TimeCell({
-    required this.label,
-    required this.value,
-    required this.icon,
-    this.highlight = false,
+/// Gradient header with greeting, date and avatar.
+class _GreetingHeader extends StatelessWidget {
+  const _GreetingHeader({
+    required this.name,
+    required this.fullName,
+    required this.now,
+    required this.topInset,
+    required this.onSummary,
   });
 
-  final String label;
-  final String value;
-  final IconData icon;
-  final bool highlight;
+  final String name;
+  final String fullName;
+  final DateTime now;
+  final double topInset;
+  final VoidCallback onSummary;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Expanded(
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: AppColors.brandGradient,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+          AppSpacing.xl, topInset + AppSpacing.lg, AppSpacing.lg, AppSpacing.xl),
       child: Row(
         children: [
-          Icon(icon,
-              size: 20,
-              color: highlight ? scheme.primary : scheme.onSurfaceVariant),
-          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  label,
-                  style: Theme.of(context)
-                      .textTheme
-                      .labelSmall
-                      ?.copyWith(color: scheme.onSurfaceVariant),
-                ),
-                Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: highlight ? scheme.primary : null,
+                  '${greetingFor(now)},',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.85),
                       ),
                 ),
+                Text(
+                  name,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Row(
+                  children: [
+                    Icon(Icons.calendar_today_rounded,
+                        size: 14, color: Colors.white.withValues(alpha: 0.85)),
+                    const SizedBox(width: 6),
+                    Text(
+                      formatFullDate(now),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.9),
+                          ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Monthly summary',
+            onPressed: onSummary,
+            icon: const Icon(Icons.insights_rounded, color: Colors.white),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          AppAvatar(name: fullName, radius: 26, onGradient: true),
+        ],
+      ),
+    );
+  }
+}
+
+/// Large attendance status card with a live-ticking worked duration.
+class _StatusCard extends StatelessWidget {
+  const _StatusCard({required this.provider, required this.now});
+
+  final AttendanceProvider provider;
+  final DateTime now;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    if (provider.todayLoading && !provider.todayLoaded) {
+      return const AppCard(
+        padding: EdgeInsets.all(AppSpacing.xxxl),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (provider.todayError != null && !provider.todayLoaded) {
+      return AppCard(
+        child: Column(
+          children: [
+            Icon(Icons.cloud_off_rounded, color: scheme.error, size: 32),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              provider.todayError!,
+              textAlign: TextAlign.center,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            AppButton(
+              label: 'Retry',
+              icon: Icons.refresh_rounded,
+              variant: AppButtonVariant.tonal,
+              expand: false,
+              onPressed: provider.loadToday,
+            ),
+          ],
+        ),
+      );
+    }
+
+    final a = provider.today;
+    final (accent, title, subtitle, icon) = _state(a);
+
+    return AppCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Accent band
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  accent.withValues(alpha: 0.16),
+                  accent.withValues(alpha: 0.04),
+                ],
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.18),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: accent, size: 28),
+                ),
+                const SizedBox(width: AppSpacing.lg),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    child: Column(
+                      key: ValueKey(title),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Today's status",
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelMedium
+                              ?.copyWith(color: scheme.onSurfaceVariant),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          title,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleLarge
+                              ?.copyWith(
+                                  fontWeight: FontWeight.w700, color: accent),
+                        ),
+                        Text(
+                          subtitle,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(color: scheme.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (a != null) StatusChip.attendance(a.status),
+              ],
+            ),
+          ),
+          // Timeline row
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    _TimelinePoint(
+                      label: 'Checked in',
+                      value: formatTime(a?.checkIn),
+                      icon: Icons.login_rounded,
+                      color: AppColors.success,
+                      active: a?.checkIn != null,
+                    ),
+                    _TimelineConnector(active: a?.checkOut != null),
+                    _TimelinePoint(
+                      label: 'Checked out',
+                      value: formatTime(a?.checkOut),
+                      icon: Icons.logout_rounded,
+                      color: AppColors.danger,
+                      active: a?.checkOut != null,
+                      trailing: true,
+                    ),
+                  ],
+                ),
+                if (a != null && (a.isLate || a.isEarlyOut)) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  Row(
+                    children: [
+                      if (a.isLate)
+                        const StatusChip(
+                            label: 'Late arrival',
+                            color: AppColors.warning,
+                            icon: Icons.schedule_rounded,
+                            dense: true),
+                      if (a.isLate && a.isEarlyOut)
+                        const SizedBox(width: AppSpacing.sm),
+                      if (a.isEarlyOut)
+                        const StatusChip(
+                            label: 'Early check-out',
+                            color: AppColors.warning,
+                            icon: Icons.directions_run_rounded,
+                            dense: true),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -420,87 +488,244 @@ class _TimeCell extends StatelessWidget {
       ),
     );
   }
+
+  /// Returns (accent, title, subtitle, icon) for the current state.
+  (Color, String, String, IconData) _state(Attendance? a) {
+    if (a == null || a.checkIn == null) {
+      if (a?.status == AttendanceStatus.onLeave) {
+        return (AppColors.info, 'On leave', 'Enjoy your day off',
+            Icons.beach_access_rounded);
+      }
+      return (
+        AppColors.slate,
+        'Not checked in',
+        'Scan the office QR to start your day',
+        Icons.nightlight_round,
+      );
+    }
+    if (a.checkOut != null) {
+      return (
+        AppColors.slate,
+        'Completed',
+        'Worked ${formatMinutes(a.workMinutes)} today',
+        Icons.task_alt_rounded,
+      );
+    }
+    // Working — live ticking
+    final worked = a.liveWorkDuration(now.toUtc());
+    return (
+      AppColors.success,
+      'Working',
+      'Since ${formatTime(a.checkIn)} · ${formatLiveDuration(worked)}',
+      Icons.work_history_rounded,
+    );
+  }
 }
 
-class _ActionGrid extends StatelessWidget {
-  const _ActionGrid({required this.provider, required this.onAction});
+class _TimelinePoint extends StatelessWidget {
+  const _TimelinePoint({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+    required this.active,
+    this.trailing = false,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final bool active;
+  final bool trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dim = !active;
+    return Expanded(
+      child: Column(
+        crossAxisAlignment:
+            trailing ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment:
+                trailing ? MainAxisAlignment.end : MainAxisAlignment.start,
+            children: [
+              if (!trailing) ...[
+                Icon(icon,
+                    size: 16,
+                    color: dim ? scheme.outline : color),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                label,
+                style: Theme.of(context)
+                    .textTheme
+                    .labelMedium
+                    ?.copyWith(color: scheme.onSurfaceVariant),
+              ),
+              if (trailing) ...[
+                const SizedBox(width: 6),
+                Icon(icon, size: 16, color: dim ? scheme.outline : color),
+              ],
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: dim ? scheme.onSurfaceVariant : null,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TimelineConnector extends StatelessWidget {
+  const _TimelineConnector({required this.active});
+
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: 32,
+      height: 2,
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+      color: active ? AppColors.success : scheme.outlineVariant,
+    );
+  }
+}
+
+/// The single context-aware action button + hint.
+class _ActionSection extends StatelessWidget {
+  const _ActionSection({required this.provider, required this.onAction});
 
   final AttendanceProvider provider;
   final Future<void> Function(AttendanceAction) onAction;
 
   @override
   Widget build(BuildContext context) {
-    final actions = [
-      (
-        AttendanceAction.checkIn,
-        Icons.login_rounded,
-        provider.canCheckIn,
-      ),
-      (
-        AttendanceAction.checkOut,
-        Icons.logout_rounded,
-        provider.canCheckOut,
-      ),
-      (
-        AttendanceAction.breakStart,
-        Icons.coffee_rounded,
-        provider.canStartBreak,
-      ),
-      (
-        AttendanceAction.breakEnd,
-        Icons.play_arrow_rounded,
-        provider.canEndBreak,
-      ),
-    ];
+    final scheme = Theme.of(context).colorScheme;
+    final action = provider.nextAction;
 
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 2.3,
-      children: [
-        for (final (action, icon, enabled) in actions)
-          _ActionButton(
-            action: action,
-            icon: icon,
-            enabled: enabled,
-            onTap: () => onAction(action),
+    Widget button;
+    String hint;
+    if (!provider.todayLoaded && provider.todayError != null) {
+      button = const _DoneButton(label: 'Status unavailable');
+      hint = 'Pull down to refresh';
+    } else if (!provider.todayLoaded) {
+      button = const AppButton(
+        label: 'Loading…',
+        height: 64,
+        onPressed: null,
+        loading: true,
+      );
+      hint = 'Checking your status…';
+    } else if (action == AttendanceAction.checkIn) {
+      button = AppButton(
+        label: 'Check In',
+        icon: Icons.login_rounded,
+        height: 64,
+        background: AppColors.success,
+        foreground: Colors.white,
+        onPressed: () => onAction(action!),
+      );
+      hint = 'Tap to scan the office QR and check in';
+    } else if (action == AttendanceAction.checkOut) {
+      button = AppButton(
+        label: 'Check Out',
+        icon: Icons.logout_rounded,
+        height: 64,
+        background: AppColors.danger,
+        foreground: Colors.white,
+        onPressed: () => onAction(action!),
+      );
+      hint = 'Tap to scan the office QR and check out';
+    } else {
+      // Done for today (checked out) or on-leave — disabled done state.
+      button = _DoneButton(
+        label: provider.isDoneForToday
+            ? 'Completed for today'
+            : 'No action available',
+      );
+      hint = provider.isDoneForToday
+          ? "You're all done — see you tomorrow!"
+          : 'Nothing to do right now';
+    }
+
+    final stateKey = !provider.todayLoaded
+        ? (provider.todayError != null ? 'error' : 'loading')
+        : (action?.name ?? (provider.isDoneForToday ? 'done' : 'none'));
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      child: Column(
+        key: ValueKey(stateKey),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          button,
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.qr_code_scanner_rounded,
+                  size: 14, color: scheme.onSurfaceVariant),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  hint,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant),
+                ),
+              ),
+            ],
           ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({
-    required this.action,
-    required this.icon,
-    required this.enabled,
-    required this.onTap,
-  });
+/// A disabled "done" pill with a checkmark for the checked-out state.
+class _DoneButton extends StatelessWidget {
+  const _DoneButton({required this.label});
 
-  final AttendanceAction action;
-  final IconData icon;
-  final bool enabled;
-  final VoidCallback onTap;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    final primary = action == AttendanceAction.checkIn ||
-        action == AttendanceAction.checkOut;
-    final button = primary
-        ? FilledButton.icon(
-            onPressed: enabled ? onTap : null,
-            icon: Icon(icon),
-            label: Text(action.label),
-          )
-        : FilledButton.tonalIcon(
-            onPressed: enabled ? onTap : null,
-            icon: Icon(icon),
-            label: Text(action.label),
-          );
-    return button;
+    return Container(
+      height: 64,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.slate.withValues(alpha: 0.12),
+        borderRadius: AppRadius.buttonR,
+        border: Border.all(color: AppColors.slate.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.check_circle_rounded, color: AppColors.slate),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.slate,
+              fontWeight: FontWeight.w700,
+              fontSize: 15.5,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -4,11 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../config/app_colors.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
 import '../providers/catalog_provider.dart';
 import '../providers/live_attendance_provider.dart';
 import '../utils/formats.dart';
-import '../widgets/app_feedback.dart';
+import '../widgets/app_avatar.dart';
+import '../widgets/app_card.dart';
+import '../widgets/states.dart';
 import '../widgets/status_chip.dart';
 import '../widgets/table_wrapper.dart';
 
@@ -52,7 +55,7 @@ class _LiveAttendanceScreenState extends State<LiveAttendanceScreen> {
     final theme = Theme.of(context);
 
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -63,11 +66,7 @@ class _LiveAttendanceScreenState extends State<LiveAttendanceScreen> {
                 child: DropdownButtonFormField<String?>(
                   key: ValueKey('live-dept-${provider.departmentId}'),
                   initialValue: provider.departmentId,
-                  decoration: const InputDecoration(
-                    labelText: 'Department',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
+                  decoration: const InputDecoration(labelText: 'Department'),
                   items: [
                     const DropdownMenuItem<String?>(
                         value: null, child: Text('All departments')),
@@ -79,105 +78,117 @@ class _LiveAttendanceScreenState extends State<LiveAttendanceScreen> {
                 ),
               ),
               const Spacer(),
-              if (data != null)
-                Text(
-                  formatDay(data.date),
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(fontWeight: FontWeight.w600),
-                ),
-              const SizedBox(width: 16),
               if (provider.lastUpdated != null)
-                Text(
-                  'Updated ${DateFormat('HH:mm:ss').format(provider.lastUpdated!)} · refreshes every 30 s',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                          color: AppColors.present, shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Updated ${DateFormat('HH:mm:ss').format(provider.lastUpdated!)} · auto every 30s',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                  ],
                 ),
-              IconButton(
+              const SizedBox(width: AppSpacing.sm),
+              IconButton.filledTonal(
                 tooltip: 'Refresh now',
                 icon: const Icon(Icons.refresh),
-                onPressed:
-                    provider.loading ? null : () => provider.fetch(),
+                onPressed: provider.loading ? null : () => provider.fetch(),
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: AppSpacing.lg),
           if (provider.error != null)
             ErrorBanner(
                 message: provider.error!, onRetry: () => provider.fetch()),
           if (data != null) ...[
             Wrap(
-              spacing: 10,
-              runSpacing: 10,
+              spacing: AppSpacing.md,
+              runSpacing: AppSpacing.md,
               children: [
                 CountChip(
                     label: 'Total',
                     count: data.summary.total,
-                    color: AppColors.notIn),
+                    color: AppColors.seed,
+                    icon: Icons.groups_outlined),
                 CountChip(
                     label: 'Present',
                     count: data.summary.present,
-                    color: AppColors.present),
+                    color: AppColors.present,
+                    icon: Icons.check_circle_outline),
                 CountChip(
                     label: 'Late',
                     count: data.summary.late,
-                    color: AppColors.late),
+                    color: AppColors.late,
+                    icon: Icons.schedule),
                 CountChip(
                     label: 'Absent',
                     count: data.summary.absent,
-                    color: AppColors.absent),
+                    color: AppColors.absent,
+                    icon: Icons.highlight_off),
                 CountChip(
                     label: 'On leave',
                     count: data.summary.onLeave,
-                    color: AppColors.onLeave),
-                CountChip(
-                    label: 'On break',
-                    count: data.summary.onBreak,
-                    color: AppColors.onBreak),
+                    color: AppColors.onLeave,
+                    icon: Icons.event_busy_outlined),
                 CountChip(
                     label: 'Checked out',
                     count: data.summary.checkedOut,
-                    color: AppColors.checkedOut),
+                    color: AppColors.checkedOut,
+                    icon: Icons.logout),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: AppSpacing.lg),
           ],
           Expanded(
             child: provider.loading && data == null
-                ? const Center(child: CircularProgressIndicator())
+                ? const LoadingState(message: 'Loading live board…')
                 : data == null || data.records.isEmpty
                     ? const EmptyState(
-                        message: 'No active employees to show.',
+                        title: 'Nobody to show',
+                        message: 'No active employees match this filter.',
                         icon: Icons.sensors_off)
-                    : TableWrapper(
-                        child: DataTable(
-                          headingTextStyle: theme.textTheme.bodySmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                          columns: const [
-                            DataColumn(label: Text('Employee ID')),
-                            DataColumn(label: Text('Name')),
-                            DataColumn(label: Text('Department')),
-                            DataColumn(label: Text('Check-in')),
-                            DataColumn(label: Text('Check-out')),
-                            DataColumn(label: Text('Work (h:mm)')),
-                            DataColumn(label: Text('Status')),
-                          ],
-                          rows: [
-                            for (final r in data.records)
-                              DataRow(cells: [
-                                DataCell(Text(r.employee.employeeId)),
-                                DataCell(Text(r.employee.name)),
-                                DataCell(Text(r.employee.departmentName)),
-                                DataCell(
-                                    Text(formatTime(r.attendance?.checkIn))),
-                                DataCell(
-                                    Text(formatTime(r.attendance?.checkOut))),
-                                DataCell(Text(r.attendance == null
-                                    ? '—'
-                                    : formatMinutes(
-                                        r.attendance!.workMinutes))),
-                                DataCell(StatusChip.live(r.liveStatus)),
-                              ]),
-                          ],
+                    : AppCard(
+                        padding: EdgeInsets.zero,
+                        child: ClipRRect(
+                          borderRadius: AppRadius.cardR,
+                          child: TableWrapper(
+                            child: DataTable(
+                              columns: const [
+                                DataColumn(label: Text('Employee')),
+                                DataColumn(label: Text('Department')),
+                                DataColumn(label: Text('Check-in')),
+                                DataColumn(label: Text('Check-out')),
+                                DataColumn(label: Text('Work (h:mm)')),
+                                DataColumn(label: Text('Status')),
+                              ],
+                              rows: [
+                                for (final r in data.records)
+                                  DataRow(cells: [
+                                    DataCell(EmployeeCell(
+                                      name: r.employee.name,
+                                      subtitle: r.employee.employeeId,
+                                    )),
+                                    DataCell(Text(r.employee.departmentName)),
+                                    DataCell(
+                                        Text(formatTime(r.attendance?.checkIn))),
+                                    DataCell(Text(
+                                        formatTime(r.attendance?.checkOut))),
+                                    DataCell(Text(r.attendance == null
+                                        ? '—'
+                                        : formatMinutes(
+                                            r.attendance!.workMinutes))),
+                                    DataCell(StatusChip.live(r.liveStatus)),
+                                  ]),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
           ),

@@ -4,25 +4,15 @@ const PRESENT_STATUSES = ['PRESENT', 'LATE', 'HALF_DAY'];
 
 /**
  * Recompute derived fields on an attendance record:
- * breakMinutes, workMinutes (excludes breaks), isLate, isEarlyOut.
- * Open intervals (no checkOut / open break) are measured up to `now`.
+ * workMinutes (full checkIn→checkOut span), isLate, isEarlyOut.
+ * workMinutes is 0 until checkOut is set.
  */
 function recomputeAttendance(att, settings, now = new Date()) {
   const tz = settings.timezone;
-  const endRef = att.checkOut ? new Date(att.checkOut) : now;
 
-  let breakMs = 0;
-  for (const b of att.breaks || []) {
-    if (!b.start) continue;
-    const start = new Date(b.start);
-    const end = b.end ? new Date(b.end) : endRef;
-    breakMs += Math.max(0, end.getTime() - start.getTime());
-  }
-  att.breakMinutes = Math.round(breakMs / 60000);
-
-  if (att.checkIn) {
-    const totalMs = Math.max(0, endRef.getTime() - new Date(att.checkIn).getTime());
-    att.workMinutes = Math.max(0, Math.round((totalMs - breakMs) / 60000));
+  if (att.checkIn && att.checkOut) {
+    const totalMs = Math.max(0, new Date(att.checkOut).getTime() - new Date(att.checkIn).getTime());
+    att.workMinutes = Math.round(totalMs / 60000);
   } else {
     att.workMinutes = 0;
   }
@@ -73,13 +63,8 @@ function liveStatusOf(att) {
   if (!att) return 'NOT_IN';
   if (att.status === 'ON_LEAVE') return 'ON_LEAVE';
   if (att.checkOut) return 'CHECKED_OUT';
-  if ((att.breaks || []).some((b) => b.start && !b.end)) return 'ON_BREAK';
   if (att.checkIn) return 'WORKING';
   return 'NOT_IN';
-}
-
-function hasOpenBreak(att) {
-  return !!att && (att.breaks || []).some((b) => b.start && !b.end);
 }
 
 module.exports = {
@@ -87,6 +72,5 @@ module.exports = {
   recomputeAttendance,
   deriveWorkedStatus,
   liveStatusOf,
-  hasOpenBreak,
   ATTENDANCE_EMPLOYEE_POPULATE,
 };

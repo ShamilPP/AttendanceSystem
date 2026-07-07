@@ -18,22 +18,6 @@ class GeoPoint {
   }
 }
 
-/// One break interval; `end` may be null while the break is open.
-class BreakEntry {
-  const BreakEntry({this.start, this.end});
-
-  final DateTime? start;
-  final DateTime? end;
-
-  factory BreakEntry.fromJson(dynamic json) {
-    final map = jsonMap(json);
-    return BreakEntry(
-      start: jsonDateTime(map['start']),
-      end: jsonDateTime(map['end']),
-    );
-  }
-}
-
 /// Admin correction metadata, present only if the record was edited.
 class Correction {
   const Correction({this.correctedBy, this.note, this.correctedAt});
@@ -93,9 +77,7 @@ class Attendance {
     required this.date,
     this.checkIn,
     this.checkOut,
-    this.breaks = const [],
     this.workMinutes = 0,
-    this.breakMinutes = 0,
     this.status = 'PRESENT',
     this.isLate = false,
     this.isEarlyOut = false,
@@ -109,9 +91,7 @@ class Attendance {
   final String date; // YYYY-MM-DD
   final DateTime? checkIn;
   final DateTime? checkOut;
-  final List<BreakEntry> breaks;
   final int workMinutes;
-  final int breakMinutes;
   final String status; // PRESENT | LATE | ABSENT | ON_LEAVE | HALF_DAY
   final bool isLate;
   final bool isEarlyOut;
@@ -127,9 +107,7 @@ class Attendance {
       date: jsonString(map['date']),
       checkIn: jsonDateTime(map['checkIn']),
       checkOut: jsonDateTime(map['checkOut']),
-      breaks: jsonList(map['breaks']).map(BreakEntry.fromJson).toList(),
       workMinutes: jsonInt(map['workMinutes']),
-      breakMinutes: jsonInt(map['breakMinutes']),
       status: jsonString(map['status'], 'PRESENT'),
       isLate: jsonBool(map['isLate']),
       isEarlyOut: jsonBool(map['isEarlyOut']),

@@ -3,11 +3,13 @@ import 'package:provider/provider.dart';
 
 import '../models/attendance.dart';
 import '../providers/attendance_provider.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
 import '../utils/formatters.dart';
 import '../widgets/async_states.dart';
 import '../widgets/status_chip.dart';
 
-/// Paginated attendance history with a date-range filter.
+/// Paginated attendance history with a date-range filter and day cards.
 class HistoryTab extends StatefulWidget {
   const HistoryTab({super.key});
 
@@ -65,7 +67,6 @@ class _HistoryTabState extends State<HistoryTab> {
   void _showDetail(Attendance record) {
     showModalBottomSheet<void>(
       context: context,
-      showDragHandle: true,
       isScrollControlled: true,
       builder: (sheetContext) => _AttendanceDetailSheet(record: record),
     );
@@ -77,32 +78,23 @@ class _HistoryTabState extends State<HistoryTab> {
 
     Widget body;
     if (provider.historyLoading && !provider.historyLoaded) {
-      body = const LoadingView(message: 'Loading history…');
+      body = const LoadingState(message: 'Loading history…');
     } else if (provider.historyError != null && provider.history.isEmpty) {
-      body = ErrorView(
+      body = ErrorState(
         message: provider.historyError!,
         onRetry: () => provider.loadHistory(refresh: true),
       );
     } else if (provider.history.isEmpty) {
-      body = RefreshIndicator(
+      body = _RefreshableEmpty(
         onRefresh: () => provider.loadHistory(refresh: true),
-        child: LayoutBuilder(
-          builder: (context, constraints) => SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: SizedBox(
-              height: constraints.maxHeight,
-              child: EmptyView(
-                icon: Icons.event_busy_rounded,
-                title: provider.historyFiltered
-                    ? 'No records in the selected range'
-                    : 'No attendance records yet',
-                subtitle: provider.historyFiltered
-                    ? 'Try a different date range.'
-                    : 'Your attendance will appear here after your '
-                        'first check-in.',
-              ),
-            ),
-          ),
+        child: EmptyState(
+          icon: Icons.event_busy_rounded,
+          title: provider.historyFiltered
+              ? 'No records in this range'
+              : 'No attendance records yet',
+          message: provider.historyFiltered
+              ? 'Try a different date range.'
+              : 'Your attendance will appear here after your first check-in.',
         ),
       );
     } else {
@@ -111,14 +103,16 @@ class _HistoryTabState extends State<HistoryTab> {
         child: ListView.separated(
           controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.xxl),
           itemCount:
               provider.history.length + (provider.historyLoadingMore ? 1 : 0),
-          separatorBuilder: (context, index) => const SizedBox(height: 8),
+          separatorBuilder: (context, index) =>
+              const SizedBox(height: AppSpacing.md),
           itemBuilder: (context, index) {
             if (index >= provider.history.length) {
               return const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
+                padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
                 child: Center(
                   child: SizedBox(
                     width: 24,
@@ -129,7 +123,7 @@ class _HistoryTabState extends State<HistoryTab> {
               );
             }
             final record = provider.history[index];
-            return _HistoryTile(
+            return _HistoryCard(
                 record: record, onTap: () => _showDetail(record));
           },
         ),
@@ -146,40 +140,106 @@ class _HistoryTabState extends State<HistoryTab> {
               onPressed: () => provider.setHistoryRange(null, null),
               icon: const Icon(Icons.filter_alt_off_rounded),
             ),
-          IconButton(
-            tooltip: 'Filter by date range',
-            onPressed: _pickRange,
-            icon: const Icon(Icons.filter_alt_outlined),
-          ),
         ],
-        bottom: provider.historyFiltered
-            ? PreferredSize(
-                preferredSize: const Size.fromHeight(40),
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 16, bottom: 8),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: InputChip(
-                      avatar: const Icon(Icons.date_range_rounded, size: 18),
-                      label: Text(
-                        '${provider.historyFrom != null ? formatDayDate(provider.historyFrom!) : '…'}'
-                        '  →  '
-                        '${provider.historyTo != null ? formatDayDate(provider.historyTo!) : '…'}',
-                      ),
-                      onDeleted: () => provider.setHistoryRange(null, null),
-                    ),
-                  ),
-                ),
-              )
-            : null,
       ),
-      body: body,
+      body: Column(
+        children: [
+          _FilterBar(
+            filtered: provider.historyFiltered,
+            from: provider.historyFrom,
+            to: provider.historyTo,
+            onPick: _pickRange,
+            onClear: () => provider.setHistoryRange(null, null),
+          ),
+          Expanded(child: body),
+        ],
+      ),
     );
   }
 }
 
-class _HistoryTile extends StatelessWidget {
-  const _HistoryTile({required this.record, required this.onTap});
+class _FilterBar extends StatelessWidget {
+  const _FilterBar({
+    required this.filtered,
+    required this.from,
+    required this.to,
+    required this.onPick,
+    required this.onClear,
+  });
+
+  final bool filtered;
+  final DateTime? from;
+  final DateTime? to;
+  final VoidCallback onPick;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.sm),
+      child: Row(
+        children: [
+          if (filtered)
+            Expanded(
+              child: InputChip(
+                avatar: const Icon(Icons.date_range_rounded, size: 18),
+                label: Text(
+                  '${from != null ? formatDayDate(from!) : '…'}'
+                  '  →  '
+                  '${to != null ? formatDayDate(to!) : '…'}',
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onDeleted: onClear,
+              ),
+            )
+          else
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: ActionChip(
+                  avatar: const Icon(Icons.filter_alt_outlined, size: 18),
+                  label: const Text('Filter by date range'),
+                  onPressed: onPick,
+                ),
+              ),
+            ),
+          if (filtered) ...[
+            const SizedBox(width: AppSpacing.sm),
+            IconButton.filledTonal(
+              tooltip: 'Change range',
+              onPressed: onPick,
+              icon: const Icon(Icons.tune_rounded),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _RefreshableEmpty extends StatelessWidget {
+  const _RefreshableEmpty({required this.onRefresh, required this.child});
+
+  final Future<void> Function() onRefresh;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: SizedBox(height: constraints.maxHeight, child: child),
+        ),
+      ),
+    );
+  }
+}
+
+class _HistoryCard extends StatelessWidget {
+  const _HistoryCard({required this.record, required this.onTap});
 
   final Attendance record;
   final VoidCallback onTap;
@@ -189,26 +249,22 @@ class _HistoryTile extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final color = attendanceStatusColor(record.status);
     return Card(
-      margin: EdgeInsets.zero,
-      elevation: 0,
-      color: scheme.surfaceContainerHigh,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(AppSpacing.lg),
           child: Row(
             children: [
               Container(
-                width: 4,
-                height: 56,
+                width: 46,
+                height: 46,
                 decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(4),
+                  color: color.withValues(alpha: AppColors.tint),
+                  borderRadius: BorderRadius.circular(12),
                 ),
+                child: Icon(_iconFor(record.status), color: color, size: 24),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -221,29 +277,62 @@ class _HistoryTile extends StatelessWidget {
                           ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      '${formatTime(record.checkIn)} → '
-                      '${formatTime(record.checkOut)}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant),
+                    Row(
+                      children: [
+                        Icon(Icons.login_rounded,
+                            size: 13, color: scheme.onSurfaceVariant),
+                        const SizedBox(width: 3),
+                        Text(formatTime(record.checkIn),
+                            style: Theme.of(context).textTheme.bodySmall),
+                        const SizedBox(width: AppSpacing.md),
+                        Icon(Icons.logout_rounded,
+                            size: 13, color: scheme.onSurfaceVariant),
+                        const SizedBox(width: 3),
+                        Text(formatTime(record.checkOut),
+                            style: Theme.of(context).textTheme.bodySmall),
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Work ${formatMinutes(record.workMinutes)} · '
-                      'Break ${formatMinutes(record.breakMinutes)}',
+                      'Worked ${formatMinutes(record.workMinutes)}',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: scheme.onSurfaceVariant),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              StatusChip.attendance(record.status, dense: true),
+              const SizedBox(width: AppSpacing.sm),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  StatusChip.attendance(record.status, dense: true),
+                  const SizedBox(height: AppSpacing.sm),
+                  Icon(Icons.chevron_right_rounded,
+                      color: scheme.onSurfaceVariant, size: 20),
+                ],
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  IconData _iconFor(String status) {
+    switch (status) {
+      case AttendanceStatus.present:
+        return Icons.check_circle_outline_rounded;
+      case AttendanceStatus.late:
+        return Icons.schedule_rounded;
+      case AttendanceStatus.absent:
+        return Icons.cancel_outlined;
+      case AttendanceStatus.onLeave:
+        return Icons.beach_access_rounded;
+      case AttendanceStatus.halfDay:
+        return Icons.hourglass_bottom_rounded;
+      default:
+        return Icons.event_note_rounded;
+    }
   }
 }
 
@@ -255,10 +344,10 @@ class _AttendanceDetailSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final now = DateTime.now().toUtc();
     return SafeArea(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+        padding: const EdgeInsets.fromLTRB(
+            AppSpacing.xxl, 0, AppSpacing.xxl, AppSpacing.xxl),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -278,24 +367,27 @@ class _AttendanceDetailSheet extends StatelessWidget {
               ],
             ),
             if (record.isLate || record.isEarlyOut) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.md),
               Wrap(
-                spacing: 8,
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
                 children: [
                   if (record.isLate)
                     const StatusChip(
                         label: 'Late arrival',
-                        color: Color(0xFFEF6C00),
+                        color: AppColors.warning,
+                        icon: Icons.schedule_rounded,
                         dense: true),
                   if (record.isEarlyOut)
                     const StatusChip(
                         label: 'Early check-out',
-                        color: Color(0xFFEF6C00),
+                        color: AppColors.warning,
+                        icon: Icons.directions_run_rounded,
                         dense: true),
                 ],
               ),
             ],
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.xl),
             _DetailRow(
                 icon: Icons.login_rounded,
                 label: 'Check-in',
@@ -306,80 +398,42 @@ class _AttendanceDetailSheet extends StatelessWidget {
                 value: formatTime(record.checkOut, placeholder: '—')),
             _DetailRow(
                 icon: Icons.timer_outlined,
-                label: 'Work duration',
+                label: 'Worked',
                 value: formatMinutes(record.workMinutes)),
-            _DetailRow(
-                icon: Icons.coffee_outlined,
-                label: 'Break duration',
-                value: formatMinutes(record.breakMinutes)),
-            const SizedBox(height: 16),
-            Text(
-              'Breaks',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleSmall
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            if (record.breaks.isEmpty)
-              Text(
-                'No breaks taken.',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(color: scheme.onSurfaceVariant),
-              )
-            else
-              ...record.breaks.asMap().entries.map((entry) {
-                final b = entry.value;
-                final open = b.isOpen;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    children: [
-                      Icon(Icons.coffee_rounded,
-                          size: 18,
-                          color: open ? scheme.primary : scheme.outline),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '${formatTime(b.start)} → '
-                          '${open ? 'ongoing' : formatTime(b.end)}',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ),
-                      Text(
-                        formatMinutes(b.duration(now).inMinutes),
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: scheme.onSurfaceVariant),
-                      ),
-                    ],
-                  ),
-                );
-              }),
+            if (record.checkInLocation != null)
+              _DetailRow(
+                icon: Icons.place_outlined,
+                label: 'Location',
+                value: 'Verified at the office',
+              ),
             if (record.correction != null) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.lg),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(AppSpacing.md),
                 decoration: BoxDecoration(
                   color: scheme.tertiaryContainer.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: AppRadius.fieldR,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Corrected by admin',
-                      style: Theme.of(context)
-                          .textTheme
-                          .labelMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
+                    Row(
+                      children: [
+                        Icon(Icons.edit_note_rounded,
+                            size: 18, color: scheme.onTertiaryContainer),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Corrected by admin',
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ],
                     ),
                     if ((record.correction!.note ?? '').isNotEmpty) ...[
-                      const SizedBox(height: 4),
+                      const SizedBox(height: AppSpacing.xs),
                       Text(record.correction!.note!,
                           style: Theme.of(context).textTheme.bodySmall),
                     ],
@@ -406,13 +460,17 @@ class _DetailRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
       child: Row(
         children: [
           Icon(icon, size: 20, color: scheme.onSurfaceVariant),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpacing.md),
           Expanded(
-            child: Text(label, style: Theme.of(context).textTheme.bodyMedium),
+            child: Text(label,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: scheme.onSurfaceVariant)),
           ),
           Text(
             value,

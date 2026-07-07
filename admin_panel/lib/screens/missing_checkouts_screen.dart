@@ -4,9 +4,14 @@ import 'package:provider/provider.dart';
 import '../models/attendance.dart';
 import '../providers/missing_checkouts_provider.dart';
 import '../services/api_client.dart';
+import '../theme/app_spacing.dart';
 import '../utils/formats.dart';
+import '../widgets/app_avatar.dart';
+import '../widgets/app_button.dart';
+import '../widgets/app_card.dart';
 import '../widgets/app_feedback.dart';
 import '../widgets/picker_fields.dart';
+import '../widgets/states.dart';
 import '../widgets/status_chip.dart';
 import '../widgets/table_wrapper.dart';
 
@@ -15,8 +20,7 @@ class MissingCheckoutsScreen extends StatefulWidget {
   const MissingCheckoutsScreen({super.key});
 
   @override
-  State<MissingCheckoutsScreen> createState() =>
-      _MissingCheckoutsScreenState();
+  State<MissingCheckoutsScreen> createState() => _MissingCheckoutsScreenState();
 }
 
 class _MissingCheckoutsScreenState extends State<MissingCheckoutsScreen> {
@@ -45,14 +49,14 @@ class _MissingCheckoutsScreenState extends State<MissingCheckoutsScreen> {
     final theme = Theme.of(context);
 
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               SizedBox(
-                width: 200,
+                width: 220,
                 child: DatePickerField(
                   label: 'Date',
                   value: provider.date,
@@ -62,61 +66,68 @@ class _MissingCheckoutsScreenState extends State<MissingCheckoutsScreen> {
                   },
                 ),
               ),
-              const SizedBox(width: 12),
-              Text(
-                '${provider.records.length} unresolved record${provider.records.length == 1 ? '' : 's'}',
-                style: theme.textTheme.bodyMedium
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-              ),
+              const SizedBox(width: AppSpacing.lg),
+              if (!provider.loading)
+                Text(
+                  '${provider.records.length} unresolved record${provider.records.length == 1 ? '' : 's'}',
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
               const Spacer(),
-              IconButton(
+              IconButton.filledTonal(
                 tooltip: 'Refresh',
                 icon: const Icon(Icons.refresh),
                 onPressed: provider.loading ? null : () => provider.fetch(),
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: AppSpacing.lg),
           if (provider.error != null)
             ErrorBanner(
                 message: provider.error!, onRetry: () => provider.fetch()),
           Expanded(
             child: provider.loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const LoadingState()
                 : provider.records.isEmpty
                     ? const EmptyState(
+                        title: 'All clear',
                         message:
-                            'No missing check-outs on this date. All records are complete.',
+                            'No missing check-outs on this date. Every record is complete.',
                         icon: Icons.task_alt)
-                    : TableWrapper(
-                        child: DataTable(
-                          headingTextStyle: theme.textTheme.bodySmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                          columns: const [
-                            DataColumn(label: Text('Employee')),
-                            DataColumn(label: Text('Date')),
-                            DataColumn(label: Text('Check-in')),
-                            DataColumn(label: Text('Break (h:mm)')),
-                            DataColumn(label: Text('Status')),
-                            DataColumn(label: Text('Actions')),
-                          ],
-                          rows: [
-                            for (final r in provider.records)
-                              DataRow(cells: [
-                                DataCell(Text(r.employee == null
-                                    ? '—'
-                                    : '${r.employee!.employeeId} · ${r.employee!.name}')),
-                                DataCell(Text(r.date)),
-                                DataCell(Text(formatTime(r.checkIn))),
-                                DataCell(Text(formatMinutes(r.breakMinutes))),
-                                DataCell(StatusChip.attendance(r.status)),
-                                DataCell(FilledButton.tonalIcon(
-                                  icon: const Icon(Icons.done, size: 16),
-                                  label: const Text('Resolve'),
-                                  onPressed: () => _openResolve(r),
-                                )),
-                              ]),
-                          ],
+                    : AppCard(
+                        padding: EdgeInsets.zero,
+                        child: ClipRRect(
+                          borderRadius: AppRadius.cardR,
+                          child: TableWrapper(
+                            child: DataTable(
+                              columns: const [
+                                DataColumn(label: Text('Employee')),
+                                DataColumn(label: Text('Date')),
+                                DataColumn(label: Text('Check-in')),
+                                DataColumn(label: Text('Status')),
+                                DataColumn(label: Text('Actions')),
+                              ],
+                              rows: [
+                                for (final r in provider.records)
+                                  DataRow(cells: [
+                                    DataCell(r.employee == null
+                                        ? const Text('—')
+                                        : EmployeeCell(
+                                            name: r.employee!.name,
+                                            subtitle: r.employee!.employeeId,
+                                          )),
+                                    DataCell(Text(r.date)),
+                                    DataCell(Text(formatTime(r.checkIn))),
+                                    DataCell(StatusChip.attendance(r.status)),
+                                    DataCell(AppButton.tonal(
+                                      label: 'Resolve',
+                                      icon: Icons.done,
+                                      onPressed: () => _openResolve(r),
+                                    )),
+                                  ]),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
           ),
@@ -196,24 +207,20 @@ class _ResolveDialogState extends State<_ResolveDialog> {
             const SizedBox(height: 6),
             Text('Checked in at ${formatTime(r.checkIn)}',
                 style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.lg),
             TimePickerField(
               label: 'Check-out time',
               value: _checkOut,
-              onChanged: (t) =>
-                  setState(() => _checkOut = t ?? _checkOut),
+              onChanged: (t) => setState(() => _checkOut = t ?? _checkOut),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.lg),
             TextField(
               controller: _noteController,
               maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'Note (required)',
-                border: OutlineInputBorder(),
-              ),
+              decoration: const InputDecoration(labelText: 'Note (required)'),
             ),
             if (_error != null) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.md),
               Text(_error!,
                   style:
                       TextStyle(color: Theme.of(context).colorScheme.error)),
@@ -226,15 +233,7 @@ class _ResolveDialogState extends State<_ResolveDialog> {
           onPressed: _saving ? null : () => Navigator.of(context).pop(false),
           child: const Text('Cancel'),
         ),
-        FilledButton(
-          onPressed: _saving ? null : _save,
-          child: _saving
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2))
-              : const Text('Resolve'),
-        ),
+        AppButton(label: 'Resolve', loading: _saving, onPressed: _save),
       ],
     );
   }

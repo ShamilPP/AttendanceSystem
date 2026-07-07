@@ -8,10 +8,16 @@ import '../providers/catalog_provider.dart';
 import '../providers/employees_provider.dart';
 import '../services/api_client.dart';
 import '../services/file_download.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
 import '../utils/formats.dart';
+import '../widgets/app_avatar.dart';
+import '../widgets/app_button.dart';
+import '../widgets/app_card.dart';
 import '../widgets/app_feedback.dart';
 import '../widgets/pagination_bar.dart';
 import '../widgets/picker_fields.dart';
+import '../widgets/states.dart';
 import '../widgets/status_chip.dart';
 import '../widgets/table_wrapper.dart';
 
@@ -31,8 +37,8 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
   @override
   void initState() {
     super.initState();
-    _searchController = TextEditingController(
-        text: context.read<EmployeesProvider>().search);
+    _searchController =
+        TextEditingController(text: context.read<EmployeesProvider>().search);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<CatalogProvider>().ensureLoaded();
@@ -82,6 +88,7 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
     final ok = await confirmDialog(
       context,
       title: 'Deactivate employee',
+      icon: Icons.person_off_outlined,
       message:
           'Deactivate ${user.name} (${user.employeeId})? This is a soft delete: '
           'the account is marked inactive and can no longer sign in, but its '
@@ -147,197 +154,189 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<EmployeesProvider>();
     final catalog = context.watch<CatalogProvider>();
-    final theme = Theme.of(context);
 
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              SizedBox(
-                width: 280,
-                child: TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    labelText: 'Search',
-                    hintText: 'Name, email or employee ID',
-                    prefixIcon: const Icon(Icons.search, size: 20),
-                    suffixIcon: IconButton(
-                      tooltip: 'Clear search',
-                      icon: const Icon(Icons.close, size: 18),
-                      onPressed: () {
-                        _searchController.clear();
-                        _applyFilters();
-                      },
+          AppCard(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Wrap(
+              spacing: AppSpacing.md,
+              runSpacing: AppSpacing.md,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                SizedBox(
+                  width: 280,
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      labelText: 'Search',
+                      hintText: 'Name, email or employee ID',
+                      prefixIcon: const Icon(Icons.search, size: 20),
+                      suffixIcon: IconButton(
+                        tooltip: 'Clear search',
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: () {
+                          _searchController.clear();
+                          _applyFilters();
+                        },
+                      ),
                     ),
-                    border: const OutlineInputBorder(),
-                    isDense: true,
+                    onSubmitted: (_) => _applyFilters(),
                   ),
-                  onSubmitted: (_) => _applyFilters(),
                 ),
-              ),
-              SizedBox(
-                width: 200,
-                child: DropdownButtonFormField<String?>(
-                  key: ValueKey('emp-dept-${provider.departmentId}'),
-                  initialValue: provider.departmentId,
-                  decoration: const InputDecoration(
-                    labelText: 'Department',
-                    border: OutlineInputBorder(),
-                    isDense: true,
+                SizedBox(
+                  width: 190,
+                  child: DropdownButtonFormField<String?>(
+                    key: ValueKey('emp-dept-${provider.departmentId}'),
+                    initialValue: provider.departmentId,
+                    decoration: const InputDecoration(labelText: 'Department'),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                          value: null, child: Text('All')),
+                      for (final d in catalog.departments)
+                        DropdownMenuItem<String?>(
+                            value: d.id, child: Text(d.name)),
+                    ],
+                    onChanged: (v) =>
+                        _applyFilters(departmentId: v, clearDepartment: v == null),
                   ),
-                  items: [
-                    const DropdownMenuItem<String?>(
-                        value: null, child: Text('All')),
-                    for (final d in catalog.departments)
+                ),
+                SizedBox(
+                  width: 190,
+                  child: DropdownButtonFormField<String?>(
+                    key: ValueKey('emp-desig-${provider.designationId}'),
+                    initialValue: provider.designationId,
+                    decoration: const InputDecoration(labelText: 'Designation'),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                          value: null, child: Text('All')),
+                      for (final d in catalog.designations)
+                        DropdownMenuItem<String?>(
+                            value: d.id, child: Text(d.name)),
+                    ],
+                    onChanged: (v) => _applyFilters(
+                        designationId: v, clearDesignation: v == null),
+                  ),
+                ),
+                SizedBox(
+                  width: 140,
+                  child: DropdownButtonFormField<String?>(
+                    key: ValueKey('emp-active-${provider.isActive}'),
+                    initialValue: provider.isActive,
+                    decoration: const InputDecoration(labelText: 'Active'),
+                    items: const [
+                      DropdownMenuItem<String?>(value: null, child: Text('All')),
                       DropdownMenuItem<String?>(
-                          value: d.id, child: Text(d.name)),
-                  ],
-                  onChanged: (v) => _applyFilters(
-                      departmentId: v, clearDepartment: v == null),
-                ),
-              ),
-              SizedBox(
-                width: 200,
-                child: DropdownButtonFormField<String?>(
-                  key: ValueKey('emp-desig-${provider.designationId}'),
-                  initialValue: provider.designationId,
-                  decoration: const InputDecoration(
-                    labelText: 'Designation',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  items: [
-                    const DropdownMenuItem<String?>(
-                        value: null, child: Text('All')),
-                    for (final d in catalog.designations)
+                          value: 'true', child: Text('Active')),
                       DropdownMenuItem<String?>(
-                          value: d.id, child: Text(d.name)),
-                  ],
-                  onChanged: (v) => _applyFilters(
-                      designationId: v, clearDesignation: v == null),
-                ),
-              ),
-              SizedBox(
-                width: 150,
-                child: DropdownButtonFormField<String?>(
-                  key: ValueKey('emp-active-${provider.isActive}'),
-                  initialValue: provider.isActive,
-                  decoration: const InputDecoration(
-                    labelText: 'Active',
-                    border: OutlineInputBorder(),
-                    isDense: true,
+                          value: 'false', child: Text('Inactive')),
+                    ],
+                    onChanged: (v) =>
+                        _applyFilters(isActive: v, clearActive: v == null),
                   ),
-                  items: const [
-                    DropdownMenuItem<String?>(
-                        value: null, child: Text('All')),
-                    DropdownMenuItem<String?>(
-                        value: 'true', child: Text('Active')),
-                    DropdownMenuItem<String?>(
-                        value: 'false', child: Text('Inactive')),
-                  ],
-                  onChanged: (v) =>
-                      _applyFilters(isActive: v, clearActive: v == null),
                 ),
-              ),
-              FilledButton.icon(
-                icon: const Icon(Icons.person_add_alt, size: 18),
-                label: const Text('Add Employee'),
-                onPressed: () => _openEditor(),
-              ),
-              OutlinedButton.icon(
-                icon: _importing
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.upload_file, size: 18),
-                label: const Text('Import'),
-                onPressed: _importing ? null : _import,
-              ),
-              OutlinedButton.icon(
-                icon: _exporting
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.download, size: 18),
-                label: const Text('Export'),
-                onPressed: _exporting ? null : _export,
-              ),
-            ],
+                AppButton(
+                  label: 'Add Employee',
+                  icon: Icons.person_add_alt,
+                  onPressed: () => _openEditor(),
+                ),
+                AppButton.outline(
+                  label: 'Import',
+                  icon: Icons.upload_file,
+                  loading: _importing,
+                  onPressed: _import,
+                ),
+                AppButton.outline(
+                  label: 'Export',
+                  icon: Icons.download,
+                  loading: _exporting,
+                  onPressed: _export,
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: AppSpacing.lg),
           if (provider.error != null)
             ErrorBanner(
                 message: provider.error!, onRetry: () => provider.fetch()),
           Expanded(
             child: provider.loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const LoadingState(message: 'Loading employees…')
                 : provider.records.isEmpty
-                    ? const EmptyState(
+                    ? EmptyState(
+                        title: 'No employees',
                         message: 'No employees match the current filters.',
-                        icon: Icons.person_off_outlined)
-                    : TableWrapper(
-                        child: DataTable(
-                          headingTextStyle: theme.textTheme.bodySmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                          columns: const [
-                            DataColumn(label: Text('Employee ID')),
-                            DataColumn(label: Text('Name')),
-                            DataColumn(label: Text('Email')),
-                            DataColumn(label: Text('Department')),
-                            DataColumn(label: Text('Designation')),
-                            DataColumn(label: Text('Phone')),
-                            DataColumn(label: Text('Joined')),
-                            DataColumn(label: Text('Status')),
-                            DataColumn(label: Text('Actions')),
-                          ],
-                          rows: [
-                            for (final u in provider.records)
-                              DataRow(cells: [
-                                DataCell(Text(u.employeeId)),
-                                DataCell(Text(u.name +
-                                    (u.isAdmin ? '  (admin)' : ''))),
-                                DataCell(Text(u.email)),
-                                DataCell(Text(u.departmentName)),
-                                DataCell(Text(u.designationName)),
-                                DataCell(Text(u.phone ?? '—')),
-                                DataCell(Text(u.joiningDate ?? '—')),
-                                DataCell(u.isActive
-                                    ? const StatusChip(
-                                        label: 'Active',
-                                        color: Color(0xFF2E7D32))
-                                    : const StatusChip(
-                                        label: 'Inactive',
-                                        color: Color(0xFF757575))),
-                                DataCell(Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      tooltip: 'Edit',
-                                      icon: const Icon(Icons.edit_outlined,
-                                          size: 18),
-                                      onPressed: () => _openEditor(u),
-                                    ),
-                                    IconButton(
-                                      tooltip: 'Deactivate (soft delete)',
-                                      icon: Icon(Icons.delete_outline,
-                                          size: 18,
-                                          color: theme.colorScheme.error),
-                                      onPressed: u.isActive
-                                          ? () => _delete(u)
+                        icon: Icons.person_off_outlined,
+                        actionLabel: 'Add Employee',
+                        onAction: () => _openEditor(),
+                      )
+                    : AppCard(
+                        padding: EdgeInsets.zero,
+                        child: ClipRRect(
+                          borderRadius: AppRadius.cardR,
+                          child: TableWrapper(
+                            child: DataTable(
+                              columns: const [
+                                DataColumn(label: Text('Employee')),
+                                DataColumn(label: Text('Email')),
+                                DataColumn(label: Text('Department')),
+                                DataColumn(label: Text('Designation')),
+                                DataColumn(label: Text('Phone')),
+                                DataColumn(label: Text('Joined')),
+                                DataColumn(label: Text('Status')),
+                                DataColumn(label: Text('Actions')),
+                              ],
+                              rows: [
+                                for (final u in provider.records)
+                                  DataRow(cells: [
+                                    DataCell(EmployeeCell(
+                                      name: u.name,
+                                      subtitle: u.employeeId,
+                                      badge: u.isAdmin
+                                          ? const _AdminBadge()
                                           : null,
-                                    ),
-                                  ],
-                                )),
-                              ]),
-                          ],
+                                    )),
+                                    DataCell(Text(u.email)),
+                                    DataCell(Text(u.departmentName)),
+                                    DataCell(Text(u.designationName)),
+                                    DataCell(Text(u.phone ?? '—')),
+                                    DataCell(Text(u.joiningDate ?? '—')),
+                                    DataCell(u.isActive
+                                        ? const StatusChip(
+                                            label: 'Active',
+                                            color: AppColors.active)
+                                        : const StatusChip(
+                                            label: 'Inactive',
+                                            color: AppColors.inactive)),
+                                    DataCell(Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          tooltip: 'Edit',
+                                          icon: const Icon(Icons.edit_outlined,
+                                              size: 18),
+                                          onPressed: () => _openEditor(u),
+                                        ),
+                                        IconButton(
+                                          tooltip: 'Deactivate (soft delete)',
+                                          icon: Icon(Icons.delete_outline,
+                                              size: 18,
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .error),
+                                          onPressed: u.isActive
+                                              ? () => _delete(u)
+                                              : null,
+                                        ),
+                                      ],
+                                    )),
+                                  ]),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
           ),
@@ -347,6 +346,26 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AdminBadge extends StatelessWidget {
+  const _AdminBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text('admin',
+          style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onPrimaryContainer,
+              fontWeight: FontWeight.w700)),
     );
   }
 }
@@ -472,36 +491,26 @@ class _EmployeeDialogState extends State<_EmployeeDialog> {
                         labelText: 'Employee ID',
                         helperText:
                             isEdit ? null : 'Leave blank to auto-generate',
-                        border: const OutlineInputBorder(),
-                        isDense: true,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: TextFormField(
                       controller: _nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Name *',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
+                      decoration: const InputDecoration(labelText: 'Name *'),
                       validator: (v) => (v == null || v.trim().isEmpty)
                           ? 'Name is required'
                           : null,
                     ),
                   ),
                 ]),
-                const SizedBox(height: 14),
+                const SizedBox(height: AppSpacing.md),
                 Row(children: [
                   Expanded(
                     child: TextFormField(
                       controller: _emailController,
-                      decoration: const InputDecoration(
-                        labelText: 'Email *',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
+                      decoration: const InputDecoration(labelText: 'Email *'),
                       validator: (v) {
                         final value = v?.trim() ?? '';
                         if (value.isEmpty) return 'Email is required';
@@ -510,7 +519,7 @@ class _EmployeeDialogState extends State<_EmployeeDialog> {
                       },
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: TextFormField(
                       controller: _passwordController,
@@ -519,8 +528,6 @@ class _EmployeeDialogState extends State<_EmployeeDialog> {
                         labelText: isEdit ? 'Password' : 'Password *',
                         helperText:
                             isEdit ? 'Leave blank to keep current' : null,
-                        border: const OutlineInputBorder(),
-                        isDense: true,
                       ),
                       validator: (v) {
                         if (!isEdit && (v == null || v.isEmpty)) {
@@ -534,16 +541,13 @@ class _EmployeeDialogState extends State<_EmployeeDialog> {
                     ),
                   ),
                 ]),
-                const SizedBox(height: 14),
+                const SizedBox(height: AppSpacing.md),
                 Row(children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       initialValue: _departmentId,
-                      decoration: const InputDecoration(
-                        labelText: 'Department *',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
+                      decoration:
+                          const InputDecoration(labelText: 'Department *'),
                       items: [
                         for (final d in catalog.departments)
                           DropdownMenuItem(value: d.id, child: Text(d.name)),
@@ -551,15 +555,12 @@ class _EmployeeDialogState extends State<_EmployeeDialog> {
                       onChanged: (v) => setState(() => _departmentId = v),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       initialValue: _designationId,
-                      decoration: const InputDecoration(
-                        labelText: 'Designation *',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
+                      decoration:
+                          const InputDecoration(labelText: 'Designation *'),
                       items: [
                         for (final d in catalog.designations)
                           DropdownMenuItem(value: d.id, child: Text(d.name)),
@@ -568,19 +569,15 @@ class _EmployeeDialogState extends State<_EmployeeDialog> {
                     ),
                   ),
                 ]),
-                const SizedBox(height: 14),
+                const SizedBox(height: AppSpacing.md),
                 Row(children: [
                   Expanded(
                     child: TextFormField(
                       controller: _phoneController,
-                      decoration: const InputDecoration(
-                        labelText: 'Phone',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
+                      decoration: const InputDecoration(labelText: 'Phone'),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: DatePickerField(
                       label: 'Joining date',
@@ -590,23 +587,15 @@ class _EmployeeDialogState extends State<_EmployeeDialog> {
                     ),
                   ),
                 ]),
-                const SizedBox(height: 14),
+                const SizedBox(height: AppSpacing.md),
                 TextFormField(
                   controller: _addressController,
-                  decoration: const InputDecoration(
-                    labelText: 'Address',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
+                  decoration: const InputDecoration(labelText: 'Address'),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: AppSpacing.md),
                 DropdownButtonFormField<String>(
                   initialValue: _role,
-                  decoration: const InputDecoration(
-                    labelText: 'Role',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
+                  decoration: const InputDecoration(labelText: 'Role'),
                   items: const [
                     DropdownMenuItem(
                         value: 'employee', child: Text('Employee')),
@@ -615,7 +604,7 @@ class _EmployeeDialogState extends State<_EmployeeDialog> {
                   onChanged: (v) => setState(() => _role = v ?? _role),
                 ),
                 if (_error != null) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpacing.md),
                   Text(_error!,
                       style: TextStyle(
                           color: Theme.of(context).colorScheme.error)),
@@ -630,14 +619,10 @@ class _EmployeeDialogState extends State<_EmployeeDialog> {
           onPressed: _saving ? null : () => Navigator.of(context).pop(false),
           child: const Text('Cancel'),
         ),
-        FilledButton(
-          onPressed: _saving ? null : _save,
-          child: _saving
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2))
-              : Text(isEdit ? 'Save changes' : 'Create'),
+        AppButton(
+          label: isEdit ? 'Save changes' : 'Create',
+          loading: _saving,
+          onPressed: _save,
         ),
       ],
     );
@@ -665,19 +650,21 @@ class _ImportResultDialog extends StatelessWidget {
               CountChip(
                   label: 'Imported',
                   count: result.imported,
-                  color: const Color(0xFF2E7D32)),
-              const SizedBox(width: 10),
+                  color: AppColors.present,
+                  icon: Icons.check_circle_outline),
+              const SizedBox(width: AppSpacing.md),
               CountChip(
                   label: 'Skipped',
                   count: result.skipped,
-                  color: const Color(0xFFCF7500)),
+                  color: AppColors.late,
+                  icon: Icons.remove_circle_outline),
             ]),
             if (result.errors.isNotEmpty) ...[
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               Text('Row errors',
                   style: theme.textTheme.bodyMedium
                       ?.copyWith(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.sm),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 240),
                 child: ListView.separated(
@@ -714,9 +701,9 @@ class _ImportResultDialog extends StatelessWidget {
         ),
       ),
       actions: [
-        FilledButton(
+        AppButton(
+          label: 'Close',
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Close'),
         ),
       ],
     );

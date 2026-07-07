@@ -14,6 +14,8 @@ import 'providers/requests_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/shell_screen.dart';
 import 'services/api_client.dart';
+import 'theme/app_theme.dart';
+import 'widgets/states.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,23 +42,11 @@ class AdminApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ReportsProvider()),
       ],
       child: MaterialApp(
-        title: 'Attendance Admin',
+        title: 'NexCrew Admin',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-          colorSchemeSeed: const Color(0xFF2A78D6),
-          visualDensity: VisualDensity.comfortable,
-          scaffoldBackgroundColor: const Color(0xFFF9F9F7),
-          dataTableTheme: const DataTableThemeData(
-            headingRowHeight: 44,
-            dataRowMinHeight: 44,
-            dataRowMaxHeight: 56,
-          ),
-          cardTheme: const CardThemeData(
-            color: Colors.white,
-            surfaceTintColor: Colors.transparent,
-          ),
-        ),
+        theme: AppTheme.light(),
+        darkTheme: AppTheme.dark(),
+        themeMode: ThemeMode.system,
         home: const _RootGate(),
       ),
     );
@@ -73,7 +63,7 @@ class _RootGate extends StatelessWidget {
     switch (auth.status) {
       case AuthStatus.restoring:
         return const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
+          body: LoadingState(message: 'Restoring your session…'),
         );
       case AuthStatus.authenticated:
         return const ShellScreen();

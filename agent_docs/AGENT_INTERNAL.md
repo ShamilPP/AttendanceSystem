@@ -14,6 +14,8 @@
 
 (No spillover files yet. Create e.g. `BACKEND_DETAILS.md`, `DECISIONS.md` here when this file nears 500 lines, and index them above.)
 
+**Shared source-of-truth docs (in `docs/`, NOT agent_docs):** `API_CONTRACT.md` (REST contract, now v2), `DESIGN_SPEC.md` (shared Flutter design system — added 2026-07-08), `PLAN.md` (original product req).
+
 ---
 
 ## 1. What this project is
@@ -36,9 +38,25 @@ Three apps, one contract:
 
 **NOT a git repository** (as of 2026-07-07). If initializing git later: .gitignore must exclude `node_modules/`, `backend/.env`, `backend/uploads/*`, Flutter `build/`, `agent_docs/` stays IN the repo (it is the project brain).
 
-## 2. Current status (as of 2026-07-07, end of day — SESSION STOPPED BY USER, resumes ~2026-07-08)
+## 2. Current status — v2 COMPLETE & VERIFIED (2026-07-08)
 
-**THE ENTIRE SYSTEM IS BUILT AND VERIFIED. All three apps passed independent verification with ZERO fix rounds.**
+**THE SYSTEM IS BUILT AND VERIFIED at v2. All three apps done; §3/§4 below reflect v2.**
+v1 was built+verified 2026-07-07 (see Update log). On 2026-07-08 the user requested v2: (1) remove breaks entirely, (2) single context-aware Check-In/Check-Out button, (3) permanent QR (regenerate-only), (4) full modern redesign of both Flutter apps. Done via 3 parallel Agent subagents (one per app) against the updated `docs/API_CONTRACT.md` v2 + new `docs/DESIGN_SPEC.md`, then INDEPENDENTLY re-verified by the main agent.
+
+| Component | v2 status | Independent verification (main agent, not just the builder's self-check) |
+|---|---|---|
+| `backend/` | ✅ DONE | ✅ 17/17 smoke checks: stable qrData across GETs, employee 403 on qr/current, regenerate→v2 invalidates old code (old→403, new→200), BREAK_START→400, no `breaks`/`breakMinutes`/`onBreak`/`qrRefreshSeconds` in any response, geofence still enforced. Builder's own run: 43/43. |
+| `mobile_app/` | ✅ DONE | ✅ `flutter analyze` clean; 18/18 tests. Single-button Home (Check In→Check Out→"Completed for today"). |
+| `admin_panel/` | ✅ DONE | ✅ `flutter analyze` clean; 3/3 tests; `flutter build web --release` succeeds. Permanent-QR page + Regenerate button. |
+| Repo-wide grep | ✅ | No `breakMinutes/BREAK_*/onBreak/ON_BREAK/qrRefreshSeconds/BreakEntry` in js/dart (only 2 code comments mention the word "breaks"). |
+
+Nothing left running; DB re-seeded pristine.
+
+**NEXT STEPS when user returns (nothing broken):**
+1. Human-in-the-loop demo still never done on a real device — the top follow-up (backend → admin QR Display kiosk → scan from mobile). Now also worth eyeballing the NEW redesign live on both apps.
+2. Optional `git init` (never asked).
+3. Production hardening backlog: disable cleartext HTTP/ATS, restrict `CORS_ORIGIN`, rotate committed `.env` secrets, HTTPS, `Access-Control-Expose-Headers: Content-Disposition`.
+4. Possible extensions: leave module, push notifications, reactivating soft-deleted employees (needs contract change — `isActive` not a write field).
 Built in one session on 2026-07-07 via a multi-agent workflow (`wf_ba04ad97-10a`: 3 parallel builders → independent adversarial verifiers; 6 agents, ~588k tokens, ~28 min). Nothing is left running: no server on port 5000, DB was re-seeded to pristine; `mongod` (system service) left running.
 
 | Component | Build | Verification result |
@@ -60,14 +78,15 @@ Seeded by `cd backend && npm run seed` (idempotent, wipe-and-recreate DB `attend
 
 - **Admin:** `admin@company.com` / `Admin@123`
 - **Employees:** `emp1@company.com` … `emp8@company.com` / `Employee@123` (8 employees, 3 departments, 4 designations)
-- **Office settings (singleton doc):** lat `25.1972`, lng `55.2744` (Dubai), radius `150` m, hours `09:00–18:00`, late/early tolerance `10` min, `qrRefreshSeconds 30`, timezone `Asia/Dubai`
+- **Office settings (singleton doc):** lat `25.1972`, lng `55.2744` (Dubai), radius `150` m, hours `09:00–18:00`, late/early tolerance `10` min, timezone `Asia/Dubai` (v2: NO `qrRefreshSeconds`)
 - **Backend env** (`backend/.env`, real values exist locally; `.env.example` committed): `PORT=5000`, `MONGODB_URI=mongodb://127.0.0.1:27017/attendance_system`, `JWT_SECRET` (random), `JWT_EXPIRES_IN=7d`, `QR_SECRET` (32-byte base64), `CORS_ORIGIN=*`
 - **Base URL everywhere:** `http://localhost:5000/api/v1`
 - **JWT payload:** `{ sub: userId, role, employeeId }`, HS256
-- **QR scheme:** AES-256-GCM over `{t: issuedAtMs, n: nonce}`, encoded `base64(iv):base64(ct):base64(authTag)`, valid `qrRefreshSeconds + 15s` grace. Admin panel fetches `GET /qr/current` and renders; mobile app treats qrData as opaque.
+- **QR scheme (v2 — PERMANENT/static):** `QrConfig` singleton model stores `{token, version, qrData, generatedAt}`. `qrData` = AES-256-GCM over `{token, v: version}`, encoded `base64(iv):base64(ct):base64(authTag)`, key from env `QR_SECRET`. `GET /qr/current` [admin] serves the SAME stored `qrData` every call (lazily creates v1 if none). `POST /qr/regenerate` [admin] mints a new token, version+1, invalidates the old. **Validation is token-match, NOT time-freshness** — an old code's token no longer equals the stored one → 403. Admin panel renders once (no countdown/auto-refresh) + Regenerate button w/ confirm. Mobile treats qrData as opaque scanned text.
 - **Response envelope:** success `{success:true, data, pagination?}` / error `{success:false, message, errors?}`. Status codes: 400 validation, 401 auth, 403 role/QR/geofence, 404, 409 conflict/duplicate.
-- **Attendance enums:** status `PRESENT|LATE|ABSENT|ON_LEAVE|HALF_DAY`; scan action `CHECK_IN|CHECK_OUT|BREAK_START|BREAK_END`; request type `MISSED_CHECK_IN|MISSED_CHECK_OUT|FULL_DAY|LEAVE`; request status `PENDING|APPROVED|REJECTED`; liveStatus `NOT_IN|WORKING|ON_BREAK|CHECKED_OUT|ON_LEAVE`.
-- **Scan validation order (backend, do not reorder):** ① QR decrypt+freshness (403) → ② geofence haversine ≤ radius (403 with "(Xm away, limit Ym)") → ③ state machine (409/400). workMinutes excludes breaks; CHECK_OUT auto-closes an open break.
+- **Attendance enums (v2):** status `PRESENT|LATE|ABSENT|ON_LEAVE|HALF_DAY`; scan action `CHECK_IN|CHECK_OUT` (NO breaks); request type `MISSED_CHECK_IN|MISSED_CHECK_OUT|FULL_DAY|LEAVE`; request status `PENDING|APPROVED|REJECTED`; liveStatus `NOT_IN|WORKING|CHECKED_OUT|ON_LEAVE` (NO ON_BREAK).
+- **Attendance record (v2):** NO `breaks`/`breakMinutes`. `workMinutes` = full checkIn→checkOut span (0 while open).
+- **Scan validation order (backend, do not reorder):** ① QR decrypt + token matches current stored token (403 "Invalid or expired QR code") → ② geofence haversine ≤ radius (403 with "(Xm away, limit Ym)") → ③ state machine: CHECK_IN once/day (409 repeat); CHECK_OUT needs prior check-in (400 if none), second CHECK_OUT 409.
 
 **Backend interpretation choices where the contract is silent (documented so nobody "fixes" them):**
 - "Present" headcounts include LATE and HALF_DAY (contract: "LATE counts as present"); `attendanceRate` is a rounded integer.
@@ -90,6 +109,8 @@ Seeded by `cd backend && npm run seed` (idempotent, wipe-and-recreate DB `attend
 8. Timezone math (late/early/workingDays) uses office-settings timezone (`Asia/Dubai`) via dayjs utc+timezone plugins, NOT server local time.
 9. **DB state is disposable in dev:** verifiers/smoke tests leave records behind (e.g. an ON_LEAVE manual entry for EMP-0002 on 2026-07-06 with note "smoke test"). `cd backend && npm run seed` wipes and recreates everything — run it before any demo. There is deliberately NO attendance-delete endpoint (corrections only, for auditability).
 10. Browsers can't read the xlsx `Content-Disposition` filename unless the backend adds `Access-Control-Expose-Headers: Content-Disposition`; admin panel falls back to sensible generated filenames — cosmetic, not a bug.
+11. **(v2) `google_fonts` (Inter) fetches the font at runtime on first launch** — needs network the first time; offline it falls back to a bundled font, so it never breaks `flutter test`/builds. Both Flutter apps use it via `lib/theme/app_theme.dart`. If you want fully offline/air-gapped, bundle the Inter .ttf and switch to a local `TextTheme`.
+12. **(v2) Shared design system lives in `docs/DESIGN_SPEC.md`** and is implemented identically in both apps under `lib/theme/` (`app_colors`, `app_spacing`, `app_theme`) + shared `lib/widgets/` components (AppCard, StatusChip, StatTile, AppButton, EmptyState/LoadingState/ErrorState, AppAvatar…). Seed color `#4F46E5`, Material 3, light+dark. Keep BOTH apps in sync if you change tokens.
 
 ## 5. How to run (quick reference)
 
@@ -126,4 +147,5 @@ Demo flow: admin panel → Office Settings (geofence) → QR Display page (kiosk
 ## 8. Update log
 
 - **2026-07-07** — Project bootstrapped from `docs/PLAN.md`. Authored `docs/API_CONTRACT.md`; launched 3-builder workflow (`wf_ba04ad97-10a`). Backend build DONE (self-tested, port-5000/AirPlay workaround). Mobile build DONE + verification PASSED (0 analyze issues, 18/18 tests; geolocator pinned ^13, see Gotcha 2). Root README written. Stray root `build/` deleted. Created `agent_docs/` + this file.
-- **2026-07-07 (end of day)** — Workflow `wf_ba04ad97-10a` COMPLETED: **backend PASSED, mobile_app PASSED, admin_panel PASSED — all with 0 fix rounds, 0 open issues.** Backend verified end-to-end against live MongoDB (full contract, adversarial checks incl. stale-QR 403, geofence distance message, double check-in/out 409s, import/export round-trip with per-row errors, document ownership, byte-identical downloads). Admin panel: analyze clean, 3/3 tests, release web build succeeded, endpoint-by-endpoint contract match confirmed. Added §3 "interpretation choices" and Gotchas 9–10 from verifier findings. Status: system COMPLETE and verified; no processes left running; DB re-seeded pristine. **User stopped the session here; resumes tomorrow (2026-07-08) — start at §2 "NEXT STEPS".** Note: initial build turn ran with ultracode ON; it is now OFF — use normal single-agent tooling unless user re-enables.
+- **2026-07-07 (end of day)** — Workflow `wf_ba04ad97-10a` COMPLETED: **backend PASSED, mobile_app PASSED, admin_panel PASSED — all with 0 fix rounds, 0 open issues.** Backend verified end-to-end against live MongoDB (full contract, adversarial checks incl. stale-QR 403, geofence distance message, double check-in/out 409s, import/export round-trip with per-row errors, document ownership, byte-identical downloads). Admin panel: analyze clean, 3/3 tests, release web build succeeded, endpoint-by-endpoint contract match confirmed. Added §3 "interpretation choices" and Gotchas 9–10 from verifier findings. Status: system COMPLETE and verified; no processes left running; DB re-seeded pristine. Note: initial build turn ran with ultracode ON; it is now OFF — use normal single-agent tooling unless user re-enables.
+- **2026-07-08** — **v2 SHIPPED & VERIFIED.** User requested: remove breaks, single Check-In/Check-Out button, permanent (regenerate-only) QR, full modern redesign of both Flutter apps. Main agent edited `docs/API_CONTRACT.md` to v2 (added a "Revision note (2026-07-08 — v2)") and wrote `docs/DESIGN_SPEC.md` (shared design system, seed `#4F46E5`, Inter, light+dark). 3 parallel Agent subagents (one per app) implemented it; main agent then INDEPENDENTLY verified: backend 17/17 v2 smoke checks (permanent QR stable + regenerate invalidates old, no break/onBreak/qrRefreshSeconds fields, geofence intact), mobile analyze clean + 18/18 tests, admin analyze clean + 3/3 tests + release web build OK, repo-wide grep clean. Backend added `models/QrConfig.js` + `POST /qr/regenerate`; both Flutter apps gained `lib/theme/` + shared `lib/widgets/`. Updated §2/§3/§4 of this file to v2. No processes left running; DB pristine. **Still not done: real human/device demo of the new build (top of §2 NEXT STEPS).**

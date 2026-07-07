@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Attendance = require('../models/Attendance');
 const User = require('../models/User');
 const OfficeSettings = require('../models/OfficeSettings');
+const QrConfig = require('../models/QrConfig');
 const { USER_POPULATE } = require('./authController');
 const {
   ApiError,
@@ -19,19 +20,18 @@ const {
   parseIso,
   dayjs,
 } = require('../utils/time');
-const { decryptQrPayload, isQrPayloadFresh } = require('../utils/qr');
+const { decryptQrPayload } = require('../utils/qr');
 const { haversineMeters } = require('../utils/geo');
 const {
   PRESENT_STATUSES,
   recomputeAttendance,
   deriveWorkedStatus,
   liveStatusOf,
-  hasOpenBreak,
   ATTENDANCE_EMPLOYEE_POPULATE,
 } = require('../utils/attendanceCalc');
 const { resolveEmployee } = require('../utils/employeeLookup');
 
-const SCAN_ACTIONS = ['CHECK_IN', 'CHECK_OUT', 'BREAK_START', 'BREAK_END'];
+const SCAN_ACTIONS = ['CHECK_IN', 'CHECK_OUT'];
 const ATT_STATUSES = ['PRESENT', 'LATE', 'ABSENT', 'ON_LEAVE', 'HALF_DAY'];
 
 async function populated(att) {
@@ -63,9 +63,10 @@ const scan = asyncHandler(async (req, res) => {
 
   const settings = await OfficeSettings.getSingleton();
 
-  // 1) QR must decrypt and be fresh
+  // 1) QR must decrypt and its token must match the current stored token
   const payload = decryptQrPayload(qrData);
-  if (!isQrPayloadFresh(payload, settings.qrRefreshSeconds)) {
+  const qrConfig = await QrConfig.getSingleton();
+  if (!payload || payload.token !== qrConfig.token) {
     throw new ApiError(403, 'Invalid or expired QR code');
   }
 
@@ -99,8 +100,6 @@ const scan = asyncHandler(async (req, res) => {
     case 'CHECK_OUT': {
       if (!att || !att.checkIn) throw new ApiError(400, 'You must check in before checking out');
       if (att.checkOut) throw new ApiError(409, 'You have already checked out today');
-      const openBreak = att.breaks.find((b) => b.start && !b.end);
-      if (openBreak) openBreak.end = now; // auto-close open break
       att.checkOut = now;
       att.checkOutLocation = location;
       recomputeAttendance(att, settings, now);
@@ -108,25 +107,6 @@ const scan = asyncHandler(async (req, res) => {
       message = att.isEarlyOut
         ? 'Checked out successfully (early check-out)'
         : 'Checked out successfully';
-      break;
-    }
-    case 'BREAK_START': {
-      if (!att || !att.checkIn) throw new ApiError(400, 'You must check in before starting a break');
-      if (att.checkOut) throw new ApiError(409, 'You have already checked out today');
-      if (hasOpenBreak(att)) throw new ApiError(409, 'A break is already in progress');
-      att.breaks.push({ start: now, end: null });
-      recomputeAttendance(att, settings, now);
-      message = 'Break started';
-      break;
-    }
-    case 'BREAK_END': {
-      if (!att || !att.checkIn) throw new ApiError(400, 'You must check in before ending a break');
-      if (att.checkOut) throw new ApiError(409, 'You have already checked out today');
-      const openBreak = att.breaks.find((b) => b.start && !b.end);
-      if (!openBreak) throw new ApiError(400, 'No break is currently in progress');
-      openBreak.end = now;
-      recomputeAttendance(att, settings, now);
-      message = 'Break ended';
       break;
     }
     default:
@@ -205,7 +185,6 @@ const summary = asyncHandler(async (req, res) => {
   let halfDays = 0;
   let earlyOutDays = 0;
   let totalWorkMinutes = 0;
-  let totalBreakMinutes = 0;
 
   for (const r of records) {
     if (PRESENT_STATUSES.includes(r.status)) presentDays += 1;
@@ -214,7 +193,6 @@ const summary = asyncHandler(async (req, res) => {
     if (r.isLate) lateDays += 1;
     if (r.isEarlyOut) earlyOutDays += 1;
     totalWorkMinutes += r.workMinutes || 0;
-    totalBreakMinutes += r.breakMinutes || 0;
   }
 
   const absentDays = Math.max(0, workingDays - presentDays - leaveDays);
@@ -229,7 +207,6 @@ const summary = asyncHandler(async (req, res) => {
     leaveDays,
     halfDays,
     totalWorkMinutes,
-    totalBreakMinutes,
     averageWorkMinutes,
     earlyOutDays,
     records,
@@ -265,7 +242,6 @@ const live = asyncHandler(async (req, res) => {
   let late = 0;
   let onLeave = 0;
   let checkedOut = 0;
-  let onBreak = 0;
 
   const records = employees.map((employee) => {
     const att = byEmployee.get(String(employee._id)) || null;
@@ -276,7 +252,6 @@ const live = asyncHandler(async (req, res) => {
       if (att.status === 'ON_LEAVE') onLeave += 1;
     }
     if (liveStatus === 'CHECKED_OUT') checkedOut += 1;
-    if (liveStatus === 'ON_BREAK') onBreak += 1;
     return { employee, attendance: att, liveStatus };
   });
 
@@ -285,7 +260,7 @@ const live = asyncHandler(async (req, res) => {
 
   ok(res, {
     date,
-    summary: { total, present, late, absent, onLeave, checkedOut, onBreak },
+    summary: { total, present, late, absent, onLeave, checkedOut },
     records,
   });
 });
@@ -328,35 +303,6 @@ const logs = asyncHandler(async (req, res) => {
   ok(res, records, { pagination: buildPagination(page, limit, total) });
 });
 
-function parseBreaksInput(rawBreaks, errors) {
-  if (!Array.isArray(rawBreaks)) {
-    errors.push({ field: 'breaks', message: 'Must be an array of { start, end } objects' });
-    return [];
-  }
-  const parsed = [];
-  for (const b of rawBreaks) {
-    const start = parseIso(b && b.start);
-    if (!start) {
-      errors.push({ field: 'breaks', message: 'Each break needs a valid ISO start time' });
-      continue;
-    }
-    let end = null;
-    if (b.end !== null && b.end !== undefined && b.end !== '') {
-      end = parseIso(b.end);
-      if (!end) {
-        errors.push({ field: 'breaks', message: 'Break end must be a valid ISO time or null' });
-        continue;
-      }
-      if (end < start) {
-        errors.push({ field: 'breaks', message: 'Break end must be after its start' });
-        continue;
-      }
-    }
-    parsed.push({ start, end });
-  }
-  return parsed;
-}
-
 // PUT /attendance/:id/correct
 const correct = asyncHandler(async (req, res) => {
   const body = req.body || {};
@@ -398,12 +344,6 @@ const correct = asyncHandler(async (req, res) => {
       }
       att.checkOut = d;
     }
-  }
-  if ('breaks' in body) {
-    const breakErrors = [];
-    const parsed = parseBreaksInput(body.breaks, breakErrors);
-    if (breakErrors.length) throw new ApiError(400, 'Validation failed', breakErrors);
-    att.breaks = parsed;
   }
   if (att.checkIn && att.checkOut && att.checkOut < att.checkIn) {
     throw new ApiError(400, 'Validation failed', [
@@ -535,8 +475,6 @@ const resolveCheckout = asyncHandler(async (req, res) => {
     ]);
   }
 
-  const openBreak = att.breaks.find((b) => b.start && !b.end);
-  if (openBreak) openBreak.end = checkOutDate;
   att.checkOut = checkOutDate;
 
   const settings = await OfficeSettings.getSingleton();

@@ -2,11 +2,11 @@ import 'json_helpers.dart';
 import 'user.dart';
 
 /// Attendance scan actions accepted by `POST /attendance/scan`.
+///
+/// v2 contract: check-in / check-out only — there is no break tracking.
 enum AttendanceAction {
   checkIn('CHECK_IN', 'Check In'),
-  checkOut('CHECK_OUT', 'Check Out'),
-  breakStart('BREAK_START', 'Start Break'),
-  breakEnd('BREAK_END', 'End Break');
+  checkOut('CHECK_OUT', 'Check Out');
 
   const AttendanceAction(this.apiValue, this.label);
 
@@ -22,34 +22,6 @@ abstract final class AttendanceStatus {
   static const absent = 'ABSENT';
   static const onLeave = 'ON_LEAVE';
   static const halfDay = 'HALF_DAY';
-}
-
-/// One break interval; `end` is null while the break is open.
-class BreakEntry {
-  const BreakEntry({this.start, this.end});
-
-  final DateTime? start;
-  final DateTime? end;
-
-  bool get isOpen => start != null && end == null;
-
-  Duration duration(DateTime now) {
-    final s = start;
-    if (s == null) return Duration.zero;
-    final e = end ?? now;
-    final d = e.difference(s);
-    return d.isNegative ? Duration.zero : d;
-  }
-
-  factory BreakEntry.fromJson(Map<String, dynamic> json) => BreakEntry(
-        start: asDateTime(json['start']),
-        end: asDateTime(json['end']),
-      );
-
-  Map<String, dynamic> toJson() => {
-        'start': start?.toUtc().toIso8601String(),
-        'end': end?.toUtc().toIso8601String(),
-      };
 }
 
 /// `{ latitude, longitude }` pair.
@@ -136,9 +108,7 @@ class Attendance {
     required this.date,
     this.checkIn,
     this.checkOut,
-    this.breaks = const [],
     this.workMinutes = 0,
-    this.breakMinutes = 0,
     this.status = AttendanceStatus.present,
     this.isLate = false,
     this.isEarlyOut = false,
@@ -154,11 +124,10 @@ class Attendance {
   final String date;
   final DateTime? checkIn;
   final DateTime? checkOut;
-  final List<BreakEntry> breaks;
 
-  /// Work minutes excluding breaks, computed by the server.
+  /// Full checkIn→checkOut span in minutes, computed by the server
+  /// (0 while the day is still open).
   final int workMinutes;
-  final int breakMinutes;
 
   /// `PRESENT | LATE | ABSENT | ON_LEAVE | HALF_DAY`.
   final String status;
@@ -177,11 +146,7 @@ class Attendance {
       date: asString(json['date']),
       checkIn: asDateTime(json['checkIn']),
       checkOut: asDateTime(json['checkOut']),
-      breaks: asList(json['breaks'])
-          .map((e) => BreakEntry.fromJson(asMap(e)))
-          .toList(),
       workMinutes: asInt(json['workMinutes']),
-      breakMinutes: asInt(json['breakMinutes']),
       status: asString(json['status'], AttendanceStatus.present),
       isLate: asBool(json['isLate']),
       isEarlyOut: asBool(json['isEarlyOut']),
@@ -203,9 +168,7 @@ class Attendance {
         'date': date,
         'checkIn': checkIn?.toUtc().toIso8601String(),
         'checkOut': checkOut?.toUtc().toIso8601String(),
-        'breaks': breaks.map((b) => b.toJson()).toList(),
         'workMinutes': workMinutes,
-        'breakMinutes': breakMinutes,
         'status': status,
         'isLate': isLate,
         'isEarlyOut': isEarlyOut,
@@ -214,34 +177,15 @@ class Attendance {
         'correction': correction?.toJson(),
       };
 
-  bool get hasOpenBreak => breaks.any((b) => b.isOpen);
+  /// True while there is an open record: checked in but not yet out.
+  bool get isWorking => checkIn != null && checkOut == null;
 
-  BreakEntry? get openBreak {
-    for (final b in breaks.reversed) {
-      if (b.isOpen) return b;
-    }
-    return null;
-  }
-
-  /// Total break time; open breaks count up to [now] (or check-out).
-  Duration liveBreakDuration(DateTime now) {
-    var total = Duration.zero;
-    for (final b in breaks) {
-      final start = b.start;
-      if (start == null) continue;
-      final end = b.end ?? checkOut ?? now;
-      final d = end.difference(start);
-      if (!d.isNegative) total += d;
-    }
-    return total;
-  }
-
-  /// Worked time excluding breaks; live-ticking while checked in.
+  /// Worked time = full checkIn→checkOut span; live-ticking while checked in.
   Duration liveWorkDuration(DateTime now) {
     final start = checkIn;
     if (start == null) return Duration.zero;
     if (checkOut != null) return Duration(minutes: workMinutes);
-    final d = now.difference(start) - liveBreakDuration(now);
+    final d = now.difference(start);
     return d.isNegative ? Duration.zero : d;
   }
 }

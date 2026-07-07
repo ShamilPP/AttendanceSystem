@@ -4,7 +4,10 @@ import 'package:provider/provider.dart';
 import '../models/attendance_request.dart';
 import '../providers/attendance_provider.dart';
 import '../services/api_client.dart';
+import '../theme/app_spacing.dart';
 import '../utils/formatters.dart';
+import '../widgets/app_button.dart';
+import '../widgets/app_text_field.dart';
 
 /// Form for a new attendance-regularization request.
 class NewRequestScreen extends StatefulWidget {
@@ -58,7 +61,8 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
           (checkIn
               ? const TimeOfDay(hour: 9, minute: 0)
               : const TimeOfDay(hour: 18, minute: 0)),
-      helpText: checkIn ? 'Requested check-in time' : 'Requested check-out time',
+      helpText:
+          checkIn ? 'Requested check-in time' : 'Requested check-out time',
     );
     if (picked == null || !mounted) return;
     setState(() {
@@ -105,8 +109,9 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
       await provider.createRequest(
         date: _date,
         type: _type,
-        requestedCheckIn:
-            _needsCheckIn && _checkInTime != null ? _combine(_checkInTime!) : null,
+        requestedCheckIn: _needsCheckIn && _checkInTime != null
+            ? _combine(_checkInTime!)
+            : null,
         requestedCheckOut: _needsCheckOut && _checkOutTime != null
             ? _combine(_checkOutTime!)
             : null,
@@ -132,7 +137,7 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
       appBar: AppBar(title: const Text('New Request')),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(AppSpacing.xl),
           child: Form(
             key: _formKey,
             child: Column(
@@ -140,26 +145,28 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
               children: [
                 if (_serverError != null) ...[
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(AppSpacing.md),
                     decoration: BoxDecoration(
                       color: scheme.errorContainer,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: AppRadius.fieldR,
                     ),
-                    child: Text(
-                      _serverError!,
-                      style: TextStyle(color: scheme.onErrorContainer),
+                    child: Row(
+                      children: [
+                        Icon(Icons.error_outline_rounded,
+                            color: scheme.onErrorContainer),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Text(
+                            _serverError!,
+                            style: TextStyle(color: scheme.onErrorContainer),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: AppSpacing.lg),
                 ],
-                Text(
-                  'Request type',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 8),
+                _Label('Request type'),
                 DropdownButtonFormField<String>(
                   initialValue: _type,
                   items: [
@@ -178,95 +185,46 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
                     prefixIcon: Icon(Icons.category_outlined),
                   ),
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  'Date',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: _busy ? null : _pickDate,
-                  icon: const Icon(Icons.event_rounded),
-                  label: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(formatDayDate(_date)),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 16),
-                  ),
+                const SizedBox(height: AppSpacing.lg),
+                _Label('Date'),
+                _PickerField(
+                  icon: Icons.event_rounded,
+                  value: formatDayDate(_date),
+                  onTap: _busy ? null : _pickDate,
                 ),
                 if (_needsCheckIn) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    'Requested check-in',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: _busy ? null : () => _pickTime(checkIn: true),
-                    icon: const Icon(Icons.login_rounded),
-                    label: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(_checkInTime == null
-                          ? 'Pick time'
-                          : _checkInTime!.format(context)),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 16),
-                    ),
+                  const SizedBox(height: AppSpacing.lg),
+                  _Label('Requested check-in'),
+                  _PickerField(
+                    icon: Icons.login_rounded,
+                    value: _checkInTime == null
+                        ? 'Pick time'
+                        : _checkInTime!.format(context),
+                    placeholder: _checkInTime == null,
+                    onTap: _busy ? null : () => _pickTime(checkIn: true),
                   ),
                 ],
                 if (_needsCheckOut) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    'Requested check-out',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: _busy ? null : () => _pickTime(checkIn: false),
-                    icon: const Icon(Icons.logout_rounded),
-                    label: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(_checkOutTime == null
-                          ? 'Pick time'
-                          : _checkOutTime!.format(context)),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 16),
-                    ),
+                  const SizedBox(height: AppSpacing.lg),
+                  _Label('Requested check-out'),
+                  _PickerField(
+                    icon: Icons.logout_rounded,
+                    value: _checkOutTime == null
+                        ? 'Pick time'
+                        : _checkOutTime!.format(context),
+                    placeholder: _checkOutTime == null,
+                    onTap: _busy ? null : () => _pickTime(checkIn: false),
                   ),
                 ],
-                const SizedBox(height: 16),
-                Text(
-                  'Reason',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
+                const SizedBox(height: AppSpacing.lg),
+                _Label('Reason'),
+                AppTextField(
+                  label: 'Reason',
                   controller: _reasonController,
                   enabled: !_busy,
+                  hint: 'Explain why this correction is needed…',
                   maxLines: 4,
                   maxLength: 500,
-                  decoration: const InputDecoration(
-                    hintText: 'Explain why this correction is needed…',
-                    alignLabelWithHint: true,
-                  ),
                   validator: (value) {
                     final v = value?.trim() ?? '';
                     if (v.isEmpty) return 'A reason is required';
@@ -276,23 +234,88 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 24),
-                FilledButton.icon(
-                  onPressed: _busy ? null : _submit,
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                  icon: _busy
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2.5),
-                        )
-                      : const Icon(Icons.send_rounded),
-                  label: Text(_busy ? 'Submitting…' : 'Submit request'),
+                const SizedBox(height: AppSpacing.xl),
+                AppButton(
+                  label: _busy ? 'Submitting…' : 'Submit request',
+                  icon: Icons.send_rounded,
+                  loading: _busy,
+                  onPressed: _submit,
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Label extends StatelessWidget {
+  const _Label(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Text(
+        text,
+        style: Theme.of(context)
+            .textTheme
+            .titleSmall
+            ?.copyWith(fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+class _PickerField extends StatelessWidget {
+  const _PickerField({
+    required this.icon,
+    required this.value,
+    required this.onTap,
+    this.placeholder = false,
+  });
+
+  final IconData icon;
+  final String value;
+  final VoidCallback? onTap;
+  final bool placeholder;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.surfaceContainerLow,
+      borderRadius: AppRadius.fieldR,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg, vertical: AppSpacing.lg),
+          decoration: BoxDecoration(
+            borderRadius: AppRadius.fieldR,
+            border: Border.all(color: scheme.outlineVariant),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: scheme.onSurfaceVariant),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    color: placeholder
+                        ? scheme.onSurfaceVariant
+                        : scheme.onSurface,
+                    fontWeight: placeholder ? FontWeight.w400 : FontWeight.w600,
+                  ),
+                ),
+              ),
+              Icon(Icons.expand_more_rounded, color: scheme.onSurfaceVariant),
+            ],
           ),
         ),
       ),

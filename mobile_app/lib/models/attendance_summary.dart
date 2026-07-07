@@ -12,7 +12,6 @@ class AttendanceSummary {
     this.leaveDays = 0,
     this.halfDays = 0,
     this.totalWorkMinutes = 0,
-    this.totalBreakMinutes = 0,
     this.averageWorkMinutes = 0,
     this.earlyOutDays = 0,
     this.records = const [],
@@ -27,7 +26,6 @@ class AttendanceSummary {
   final int leaveDays;
   final int halfDays;
   final int totalWorkMinutes;
-  final int totalBreakMinutes;
   final int averageWorkMinutes;
   final int earlyOutDays;
   final List<Attendance> records;
@@ -42,7 +40,6 @@ class AttendanceSummary {
       leaveDays: asInt(json['leaveDays']),
       halfDays: asInt(json['halfDays']),
       totalWorkMinutes: asInt(json['totalWorkMinutes']),
-      totalBreakMinutes: asInt(json['totalBreakMinutes']),
       averageWorkMinutes: asInt(json['averageWorkMinutes']),
       earlyOutDays: asInt(json['earlyOutDays']),
       records: asList(json['records'])
@@ -60,7 +57,6 @@ class AttendanceSummary {
         'leaveDays': leaveDays,
         'halfDays': halfDays,
         'totalWorkMinutes': totalWorkMinutes,
-        'totalBreakMinutes': totalBreakMinutes,
         'averageWorkMinutes': averageWorkMinutes,
         'earlyOutDays': earlyOutDays,
         'records': records.map((r) => r.toJson()).toList(),

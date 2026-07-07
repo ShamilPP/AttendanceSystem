@@ -11,7 +11,6 @@ class LiveSummary {
     this.absent = 0,
     this.onLeave = 0,
     this.checkedOut = 0,
-    this.onBreak = 0,
   });
 
   final int total;
@@ -20,7 +19,6 @@ class LiveSummary {
   final int absent;
   final int onLeave;
   final int checkedOut;
-  final int onBreak;
 
   factory LiveSummary.fromJson(dynamic json) {
     final map = jsonMap(json);
@@ -31,7 +29,6 @@ class LiveSummary {
       absent: jsonInt(map['absent']),
       onLeave: jsonInt(map['onLeave']),
       checkedOut: jsonInt(map['checkedOut']),
-      onBreak: jsonInt(map['onBreak']),
     );
   }
 }
@@ -46,7 +43,7 @@ class LiveRecord {
 
   final User employee;
   final Attendance? attendance;
-  final String liveStatus; // NOT_IN | WORKING | ON_BREAK | CHECKED_OUT | ON_LEAVE
+  final String liveStatus; // NOT_IN | WORKING | CHECKED_OUT | ON_LEAVE
 
   factory LiveRecord.fromJson(dynamic json) {
     final map = jsonMap(json);

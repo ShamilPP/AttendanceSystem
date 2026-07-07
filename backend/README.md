@@ -45,7 +45,7 @@ The API listens on `http://localhost:5000` with base path `/api/v1`.
 | Admin | `admin@company.com` | `Admin@123` |
 | Employees | `emp1@company.com` … `emp8@company.com` | `Employee@123` |
 
-Seed also creates the office settings singleton (lat `25.1972`, lng `55.2744`, radius `150` m, hours `09:00–18:00`, tolerances `10` min, QR refresh `30` s, timezone `Asia/Dubai`), 3 departments and 4 designations.
+Seed also creates the office settings singleton (lat `25.1972`, lng `55.2744`, radius `150` m, hours `09:00–18:00`, tolerances `10` min, timezone `Asia/Dubai`), an initial permanent QR code (version 1), 3 departments and 4 designations.
 
 ## Endpoint overview (base `/api/v1`)
 
@@ -53,7 +53,7 @@ Seed also creates the office settings singleton (lat `25.1972`, lng `55.2744`, r
 - **Employees (admin):** `GET|POST /employees`, `GET|PUT|DELETE /employees/:id` (`?hard=true` for permanent delete), `POST /employees/import` (.xlsx), `GET /employees/export` (.xlsx)
 - **Departments / Designations:** `GET /departments`, `GET /designations` (any role); `POST`, `PUT /:id`, `DELETE /:id` (admin, 409 when in use)
 - **Office settings:** `GET /office-settings` (any), `PUT /office-settings` (admin)
-- **QR (admin):** `GET /qr/current` — rotating AES-256-GCM encrypted payload
+- **QR (admin):** `GET /qr/current` — permanent (static) AES-256-GCM encrypted payload; `POST /qr/regenerate` — mint a new code and invalidate the old one
 - **Attendance (employee):** `POST /attendance/scan` (QR + geofence + state machine), `GET /attendance/today`, `GET /attendance/history`, `GET /attendance/summary?month=YYYY-MM`, `POST /attendance/requests`, `GET /attendance/requests/me`
 - **Attendance (admin):** `GET /attendance/live`, `GET /attendance/logs`, `PUT /attendance/:id/correct`, `POST /attendance/manual`, `GET /attendance/requests`, `PUT /attendance/requests/:id`, `GET /attendance/missing-checkouts`, `PUT /attendance/:id/resolve-checkout`
 - **Dashboard (admin):** `GET /dashboard/stats`, `GET /dashboard/trends?period=daily|weekly|monthly`
@@ -66,5 +66,5 @@ All responses use the shared envelope: `{ "success": true, "data": … }` on suc
 ## Notes
 
 - Uploaded files are stored in `backend/uploads/` and only served through the download endpoint.
-- Work/break minutes, late and early-out flags are recomputed server-side on every change; all time-of-day rules honor the configured office timezone.
-- The QR code payload rotates every `qrRefreshSeconds` and scans are accepted for `qrRefreshSeconds + 15s`.
+- Attendance is check-in + check-out only (no breaks); `workMinutes` is the full check-in→check-out span. Late and early-out flags are recomputed server-side on every change; all time-of-day rules honor the configured office timezone.
+- The QR code is permanent (static): `GET /qr/current` always serves the same stored code until an admin calls `POST /qr/regenerate`, which mints a new code and immediately invalidates the previous one. Scans are validated by matching the code's embedded token against the current stored token (no time-based expiry).

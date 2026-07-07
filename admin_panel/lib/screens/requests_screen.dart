@@ -4,9 +4,14 @@ import 'package:provider/provider.dart';
 import '../models/attendance_request.dart';
 import '../providers/requests_provider.dart';
 import '../services/api_client.dart';
+import '../theme/app_spacing.dart';
 import '../utils/formats.dart';
+import '../widgets/app_avatar.dart';
+import '../widgets/app_button.dart';
+import '../widgets/app_card.dart';
 import '../widgets/app_feedback.dart';
 import '../widgets/pagination_bar.dart';
+import '../widgets/states.dart';
 import '../widgets/status_chip.dart';
 import '../widgets/table_wrapper.dart';
 
@@ -85,20 +90,25 @@ class _RequestsScreenState extends State<RequestsScreen>
       children: [
         Material(
           color: theme.colorScheme.surface,
-          child: TabBar(
-            controller: _tabController,
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            tabs: const [
-              Tab(text: 'Pending'),
-              Tab(text: 'Approved'),
-              Tab(text: 'Rejected'),
+          child: Column(
+            children: [
+              TabBar(
+                controller: _tabController,
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                dividerColor: theme.colorScheme.outlineVariant,
+                tabs: const [
+                  Tab(text: 'Pending'),
+                  Tab(text: 'Approved'),
+                  Tab(text: 'Rejected'),
+                ],
+              ),
             ],
           ),
         ),
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(AppSpacing.xl),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -108,82 +118,96 @@ class _RequestsScreenState extends State<RequestsScreen>
                       onRetry: () => provider.fetch()),
                 Expanded(
                   child: provider.loading
-                      ? const Center(child: CircularProgressIndicator())
+                      ? const LoadingState()
                       : provider.records.isEmpty
                           ? EmptyState(
+                              title: 'Nothing here',
                               message:
-                                  'No ${provider.status.toLowerCase()} requests.',
+                                  'No ${provider.status.toLowerCase()} requests right now.',
                               icon: Icons.pending_actions_outlined)
-                          : TableWrapper(
-                              child: DataTable(
-                                headingTextStyle: theme.textTheme.bodySmall
-                                    ?.copyWith(fontWeight: FontWeight.w700),
-                                columns: [
-                                  const DataColumn(label: Text('Employee')),
-                                  const DataColumn(label: Text('Date')),
-                                  const DataColumn(label: Text('Type')),
-                                  const DataColumn(
-                                      label: Text('Requested in')),
-                                  const DataColumn(
-                                      label: Text('Requested out')),
-                                  const DataColumn(label: Text('Reason')),
-                                  const DataColumn(label: Text('Status')),
-                                  if (provider.status == 'PENDING')
-                                    const DataColumn(label: Text('Actions'))
-                                  else
-                                    const DataColumn(
-                                        label: Text('Review note')),
-                                ],
-                                rows: [
-                                  for (final r in provider.records)
-                                    DataRow(cells: [
-                                      DataCell(Text(r.employee == null
-                                          ? '—'
-                                          : '${r.employee!.employeeId} · ${r.employee!.name}')),
-                                      DataCell(Text(r.date)),
-                                      DataCell(Text(r.typeLabel)),
-                                      DataCell(Text(
-                                          formatTime(r.requestedCheckIn))),
-                                      DataCell(Text(
-                                          formatTime(r.requestedCheckOut))),
-                                      DataCell(
-                                        Tooltip(
-                                          message: r.reason,
-                                          child: SizedBox(
-                                            width: 180,
-                                            child: Text(
-                                              r.reason,
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
+                          : AppCard(
+                              padding: EdgeInsets.zero,
+                              child: ClipRRect(
+                                borderRadius: AppRadius.cardR,
+                                child: TableWrapper(
+                                  child: DataTable(
+                                    columns: [
+                                      const DataColumn(label: Text('Employee')),
+                                      const DataColumn(label: Text('Date')),
+                                      const DataColumn(label: Text('Type')),
+                                      const DataColumn(
+                                          label: Text('Requested in')),
+                                      const DataColumn(
+                                          label: Text('Requested out')),
+                                      const DataColumn(label: Text('Reason')),
+                                      const DataColumn(label: Text('Status')),
+                                      if (provider.status == 'PENDING')
+                                        const DataColumn(label: Text('Actions'))
+                                      else
+                                        const DataColumn(
+                                            label: Text('Review note')),
+                                    ],
+                                    rows: [
+                                      for (final r in provider.records)
+                                        DataRow(cells: [
+                                          DataCell(r.employee == null
+                                              ? const Text('—')
+                                              : EmployeeCell(
+                                                  name: r.employee!.name,
+                                                  subtitle:
+                                                      r.employee!.employeeId,
+                                                )),
+                                          DataCell(Text(r.date)),
+                                          DataCell(Text(r.typeLabel)),
+                                          DataCell(Text(
+                                              formatTime(r.requestedCheckIn))),
+                                          DataCell(Text(
+                                              formatTime(r.requestedCheckOut))),
+                                          DataCell(
+                                            Tooltip(
+                                              message: r.reason,
+                                              child: SizedBox(
+                                                width: 180,
+                                                child: Text(
+                                                  r.reason,
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                      ),
-                                      DataCell(StatusChip.request(r.status)),
-                                      if (provider.status == 'PENDING')
-                                        DataCell(Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            TextButton(
-                                              onPressed: () =>
-                                                  _review(r, 'APPROVED'),
-                                              child: const Text('Approve'),
-                                            ),
-                                            const SizedBox(width: 4),
-                                            TextButton(
-                                              style: TextButton.styleFrom(
-                                                  foregroundColor: theme
-                                                      .colorScheme.error),
-                                              onPressed: () =>
-                                                  _review(r, 'REJECTED'),
-                                              child: const Text('Reject'),
-                                            ),
-                                          ],
-                                        ))
-                                      else
-                                        DataCell(Text(r.reviewNote ?? '—')),
-                                    ]),
-                                ],
+                                          DataCell(
+                                              StatusChip.request(r.status)),
+                                          if (provider.status == 'PENDING')
+                                            DataCell(Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                AppButton(
+                                                  label: 'Approve',
+                                                  variant:
+                                                      AppButtonVariant.text,
+                                                  onPressed: () =>
+                                                      _review(r, 'APPROVED'),
+                                                ),
+                                                const SizedBox(width: 4),
+                                                TextButton(
+                                                  style: TextButton.styleFrom(
+                                                      foregroundColor: theme
+                                                          .colorScheme.error),
+                                                  onPressed: () =>
+                                                      _review(r, 'REJECTED'),
+                                                  child: const Text('Reject'),
+                                                ),
+                                              ],
+                                            ))
+                                          else
+                                            DataCell(
+                                                Text(r.reviewNote ?? '—')),
+                                        ]),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
                 ),
@@ -250,13 +274,12 @@ class _ReviewDialogState extends State<_ReviewDialog> {
                     color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
             ],
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.lg),
             TextField(
               controller: _noteController,
               maxLines: 2,
               decoration: const InputDecoration(
                 labelText: 'Review note (optional)',
-                border: OutlineInputBorder(),
               ),
             ),
           ],
@@ -267,15 +290,17 @@ class _ReviewDialogState extends State<_ReviewDialog> {
           onPressed: () => Navigator.of(context).pop(null),
           child: const Text('Cancel'),
         ),
-        FilledButton(
-          style: approve
-              ? null
-              : FilledButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.error),
-          onPressed: () =>
-              Navigator.of(context).pop(_noteController.text.trim()),
-          child: Text(approve ? 'Approve' : 'Reject'),
-        ),
+        approve
+            ? AppButton(
+                label: 'Approve',
+                onPressed: () =>
+                    Navigator.of(context).pop(_noteController.text.trim()),
+              )
+            : AppButton.danger(
+                label: 'Reject',
+                onPressed: () =>
+                    Navigator.of(context).pop(_noteController.text.trim()),
+              ),
       ],
     );
   }

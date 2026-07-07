@@ -29,7 +29,6 @@ const updateSettings = asyncHandler(async (req, res) => {
   numberField('radiusMeters', { min: 1, max: 100000 });
   numberField('lateToleranceMinutes', { min: 0, max: 480 });
   numberField('earlyLeaveToleranceMinutes', { min: 0, max: 480 });
-  numberField('qrRefreshSeconds', { min: 5, max: 3600 });
 
   for (const field of ['workStartTime', 'workEndTime']) {
     if (body[field] === undefined) continue;

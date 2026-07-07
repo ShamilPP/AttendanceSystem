@@ -5,11 +5,17 @@ import '../providers/attendance_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/documents_provider.dart';
 import '../services/api_client.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
+import '../widgets/app_avatar.dart';
+import '../widgets/app_button.dart';
+import '../widgets/app_text_field.dart';
 import '../utils/formatters.dart';
 import 'documents_screen.dart';
 import 'login_screen.dart';
 
-/// Employee profile, change-password and logout.
+/// Employee profile: avatar header, info rows, change-password, documents,
+/// logout.
 class ProfileTab extends StatelessWidget {
   const ProfileTab({super.key});
 
@@ -32,6 +38,7 @@ class ProfileTab extends StatelessWidget {
             child: const Text('Cancel'),
           ),
           FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: const Text('Log out'),
           ),
@@ -54,71 +61,73 @@ class ProfileTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().user;
     final scheme = Theme.of(context).colorScheme;
+    final topInset = MediaQuery.of(context).padding.top;
+
+    if (user == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Profile')),
-      body: user == null
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: () async {
-                try {
-                  await context.read<AuthProvider>().refreshMe();
-                } on ApiException catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(e.message)),
-                    );
-                  }
-                }
-              },
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          try {
+            await context.read<AuthProvider>().refreshMe();
+          } on ApiException catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(SnackBar(content: Text(e.message)));
+            }
+          }
+        },
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.zero,
+          children: [
+            // Gradient profile header
+            Container(
+              decoration: const BoxDecoration(
+                gradient: AppColors.brandGradient,
+                borderRadius:
+                    BorderRadius.vertical(bottom: Radius.circular(28)),
+              ),
+              padding: EdgeInsets.fromLTRB(AppSpacing.xl,
+                  topInset + AppSpacing.xl, AppSpacing.xl, AppSpacing.xxl),
+              child: Column(
                 children: [
-                  Row(
+                  AppAvatar(name: user.name, radius: 40, onGradient: true),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    user.name,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: AppSpacing.sm,
                     children: [
-                      CircleAvatar(
-                        radius: 34,
-                        backgroundColor: scheme.primaryContainer,
-                        child: Text(
-                          user.initials,
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w700,
-                            color: scheme.onPrimaryContainer,
-                          ),
-                        ),
+                      _HeaderPill(
+                        icon: Icons.badge_outlined,
+                        label: user.employeeId.isEmpty ? '—' : user.employeeId,
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              user.name,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleLarge
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                            if ((user.designation?.name ?? '').isNotEmpty)
-                              Text(
-                                user.designation!.name,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                        color: scheme.onSurfaceVariant),
-                              ),
-                          ],
+                      if ((user.designation?.name ?? '').isNotEmpty)
+                        _HeaderPill(
+                          icon: Icons.work_outline_rounded,
+                          label: user.designation!.name,
                         ),
-                      ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                children: [
                   _InfoCard(rows: [
-                    (Icons.badge_outlined, 'Employee ID',
-                        user.employeeId.isEmpty ? '—' : user.employeeId),
                     (Icons.alternate_email_rounded, 'Email', user.email),
                     (
                       Icons.apartment_rounded,
@@ -152,18 +161,15 @@ class ProfileTab extends StatelessWidget {
                           : formatDateString(user.joiningDate!)
                     ),
                   ]),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: AppSpacing.lg),
                   Card(
-                    margin: EdgeInsets.zero,
-                    clipBehavior: Clip.antiAlias,
                     child: Column(
                       children: [
-                        ListTile(
-                          leading: const Icon(Icons.folder_outlined),
-                          title: const Text('My documents'),
-                          subtitle: const Text(
-                              'ID proofs, company ID cards and more'),
-                          trailing: const Icon(Icons.chevron_right_rounded),
+                        _ActionRow(
+                          icon: Icons.folder_outlined,
+                          iconColor: AppColors.info,
+                          title: 'My documents',
+                          subtitle: 'ID proofs, company ID cards and more',
                           onTap: () {
                             Navigator.of(context).push(
                               MaterialPageRoute<void>(
@@ -171,27 +177,123 @@ class ProfileTab extends StatelessWidget {
                             );
                           },
                         ),
-                        const Divider(height: 1),
-                        ListTile(
-                          leading: const Icon(Icons.lock_reset_rounded),
-                          title: const Text('Change password'),
-                          trailing: const Icon(Icons.chevron_right_rounded),
+                        const Divider(height: 1, indent: 16, endIndent: 16),
+                        _ActionRow(
+                          icon: Icons.lock_reset_rounded,
+                          iconColor: AppColors.teal,
+                          title: 'Change password',
+                          subtitle: 'Update your account password',
                           onTap: () => _changePassword(context),
                         ),
-                        const Divider(height: 1),
-                        ListTile(
-                          leading:
-                              Icon(Icons.logout_rounded, color: scheme.error),
-                          title: Text('Log out',
-                              style: TextStyle(color: scheme.error)),
+                        const Divider(height: 1, indent: 16, endIndent: 16),
+                        _ActionRow(
+                          icon: Icons.logout_rounded,
+                          iconColor: AppColors.danger,
+                          title: 'Log out',
+                          subtitle: 'Sign out of this device',
+                          danger: true,
                           onTap: () => _logout(context),
                         ),
                       ],
                     ),
                   ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Text(
+                    'NexCrew Attendance',
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelSmall
+                        ?.copyWith(color: scheme.outline),
+                  ),
                 ],
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderPill extends StatelessWidget {
+  const _HeaderPill({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding:
+          const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.18),
+        borderRadius: AppRadius.pillR,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: Colors.white),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12.5),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionRow extends StatelessWidget {
+  const _ActionRow({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.danger = false,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ListTile(
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg, vertical: AppSpacing.xs),
+      leading: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: iconColor.withValues(alpha: AppColors.tint),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: iconColor, size: 22),
+      ),
+      title: Text(
+        title,
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: danger ? AppColors.danger : null,
+            ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: Theme.of(context)
+            .textTheme
+            .bodySmall
+            ?.copyWith(color: scheme.onSurfaceVariant),
+      ),
+      trailing: const Icon(Icons.chevron_right_rounded),
     );
   }
 }
@@ -205,26 +307,24 @@ class _InfoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Card(
-      margin: EdgeInsets.zero,
-      elevation: 0,
-      color: scheme.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg, vertical: AppSpacing.xs),
         child: Column(
           children: [
-            for (final (icon, label, value) in rows)
+            for (var i = 0; i < rows.length; i++) ...[
+              if (i > 0) Divider(height: 1, color: scheme.outlineVariant),
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(icon, size: 20, color: scheme.onSurfaceVariant),
-                    const SizedBox(width: 12),
+                    Icon(rows[i].$1, size: 20, color: scheme.onSurfaceVariant),
+                    const SizedBox(width: AppSpacing.md),
                     SizedBox(
-                      width: 100,
+                      width: 96,
                       child: Text(
-                        label,
+                        rows[i].$2,
                         style: Theme.of(context)
                             .textTheme
                             .bodySmall
@@ -233,7 +333,7 @@ class _InfoCard extends StatelessWidget {
                     ),
                     Expanded(
                       child: Text(
-                        value,
+                        rows[i].$3,
                         style: Theme.of(context)
                             .textTheme
                             .bodyMedium
@@ -243,6 +343,7 @@ class _InfoCard extends StatelessWidget {
                   ],
                 ),
               ),
+            ],
           ],
         ),
       ),
@@ -313,56 +414,54 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
               if (_serverError != null) ...[
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(AppSpacing.md),
                   decoration: BoxDecoration(
                     color: scheme.errorContainer,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: AppRadius.fieldR,
                   ),
                   child: Text(
                     _serverError!,
                     style: TextStyle(color: scheme.onErrorContainer),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpacing.md),
               ],
-              TextFormField(
+              AppTextField(
+                label: 'Current password',
                 controller: _currentController,
                 enabled: !_busy,
                 obscureText: _obscure,
-                decoration: const InputDecoration(
-                    labelText: 'Current password'),
+                prefixIcon: Icons.lock_outline_rounded,
                 validator: (value) => (value == null || value.isEmpty)
                     ? 'Current password is required'
                     : null,
               ),
-              const SizedBox(height: 12),
-              TextFormField(
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                label: 'New password',
                 controller: _newController,
                 enabled: !_busy,
                 obscureText: _obscure,
-                decoration: const InputDecoration(labelText: 'New password'),
+                prefixIcon: Icons.lock_reset_rounded,
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return 'New password is required';
                   }
-                  if (value.length < 6) {
-                    return 'Use at least 6 characters';
-                  }
+                  if (value.length < 6) return 'Use at least 6 characters';
                   return null;
                 },
               ),
-              const SizedBox(height: 12),
-              TextFormField(
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                label: 'Confirm new password',
                 controller: _confirmController,
                 enabled: !_busy,
                 obscureText: _obscure,
-                decoration: const InputDecoration(
-                    labelText: 'Confirm new password'),
+                prefixIcon: Icons.lock_person_rounded,
                 validator: (value) => value != _newController.text
                     ? 'Passwords do not match'
                     : null,
               ),
-              const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton.icon(
@@ -385,15 +484,11 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
           onPressed: _busy ? null : () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        FilledButton(
-          onPressed: _busy ? null : _submit,
-          child: _busy
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2.5),
-                )
-              : const Text('Update'),
+        AppButton(
+          label: 'Update',
+          loading: _busy,
+          expand: false,
+          onPressed: _submit,
         ),
       ],
     );

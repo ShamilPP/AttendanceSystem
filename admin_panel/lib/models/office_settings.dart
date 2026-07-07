@@ -10,7 +10,6 @@ class OfficeSettings {
     this.workEndTime = '18:00',
     this.lateToleranceMinutes = 10,
     this.earlyLeaveToleranceMinutes = 10,
-    this.qrRefreshSeconds = 30,
     this.timezone = 'Asia/Dubai',
   });
 
@@ -21,7 +20,6 @@ class OfficeSettings {
   final String workEndTime; // HH:mm
   final int lateToleranceMinutes;
   final int earlyLeaveToleranceMinutes;
-  final int qrRefreshSeconds;
   final String timezone;
 
   factory OfficeSettings.fromJson(dynamic json) {
@@ -34,7 +32,6 @@ class OfficeSettings {
       workEndTime: jsonString(map['workEndTime'], '18:00'),
       lateToleranceMinutes: jsonInt(map['lateToleranceMinutes'], 10),
       earlyLeaveToleranceMinutes: jsonInt(map['earlyLeaveToleranceMinutes'], 10),
-      qrRefreshSeconds: jsonInt(map['qrRefreshSeconds'], 30),
       timezone: jsonString(map['timezone'], 'Asia/Dubai'),
     );
   }
@@ -47,7 +44,6 @@ class OfficeSettings {
         'workEndTime': workEndTime,
         'lateToleranceMinutes': lateToleranceMinutes,
         'earlyLeaveToleranceMinutes': earlyLeaveToleranceMinutes,
-        'qrRefreshSeconds': qrRefreshSeconds,
         'timezone': timezone,
       };
 }

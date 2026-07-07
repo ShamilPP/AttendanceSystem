@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/attendance_request.dart';
 import '../providers/attendance_provider.dart';
+import '../theme/app_spacing.dart';
 import '../utils/formatters.dart';
 import '../widgets/async_states.dart';
 import '../widgets/status_chip.dart';
@@ -69,9 +70,9 @@ class _RequestsTabState extends State<RequestsTab> {
 
     Widget body;
     if (provider.requestsLoading && !provider.requestsLoaded) {
-      body = const LoadingView(message: 'Loading requests…');
+      body = const LoadingState(message: 'Loading requests…');
     } else if (provider.requestsError != null && provider.requests.isEmpty) {
-      body = ErrorView(
+      body = ErrorState(
         message: provider.requestsError!,
         onRetry: () => provider.loadRequests(refresh: true),
       );
@@ -83,11 +84,11 @@ class _RequestsTabState extends State<RequestsTab> {
             physics: const AlwaysScrollableScrollPhysics(),
             child: SizedBox(
               height: constraints.maxHeight,
-              child: const EmptyView(
+              child: const EmptyState(
                 icon: Icons.pending_actions_rounded,
                 title: 'No requests yet',
-                subtitle: 'Use the + button to request a correction '
-                    'for a missed check-in/out or leave.',
+                message: 'Tap the button below to request a correction for a '
+                    'missed check-in/out or leave.',
               ),
             ),
           ),
@@ -99,14 +100,16 @@ class _RequestsTabState extends State<RequestsTab> {
         child: ListView.separated(
           controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+          padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 96),
           itemCount: provider.requests.length +
               (provider.requestsLoadingMore ? 1 : 0),
-          separatorBuilder: (context, index) => const SizedBox(height: 8),
+          separatorBuilder: (context, index) =>
+              const SizedBox(height: AppSpacing.md),
           itemBuilder: (context, index) {
             if (index >= provider.requests.length) {
               return const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
+                padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
                 child: Center(
                   child: SizedBox(
                     width: 24,
@@ -116,39 +119,41 @@ class _RequestsTabState extends State<RequestsTab> {
                 ),
               );
             }
-            return _RequestTile(request: provider.requests[index]);
+            return _RequestCard(request: provider.requests[index]);
           },
         ),
       );
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Requests'),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(52),
-          child: SizedBox(
-            height: 44,
+      appBar: AppBar(title: const Text('Requests')),
+      body: Column(
+        children: [
+          SizedBox(
+            height: 52,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
               itemCount: _filters.length,
-              separatorBuilder: (context, index) => const SizedBox(width: 8),
+              separatorBuilder: (context, index) =>
+                  const SizedBox(width: AppSpacing.sm),
               itemBuilder: (context, index) {
                 final (label, value) = _filters[index];
                 final selected = provider.requestsStatusFilter == value;
-                return FilterChip(
-                  label: Text(label),
-                  selected: selected,
-                  onSelected: (_) =>
-                      provider.setRequestsStatusFilter(value),
+                return Center(
+                  child: FilterChip(
+                    label: Text(label),
+                    selected: selected,
+                    showCheckmark: false,
+                    onSelected: (_) => provider.setRequestsStatusFilter(value),
+                  ),
                 );
               },
             ),
           ),
-        ),
+          Expanded(child: body),
+        ],
       ),
-      body: body,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openNewRequest,
         icon: const Icon(Icons.add_rounded),
@@ -158,8 +163,8 @@ class _RequestsTabState extends State<RequestsTab> {
   }
 }
 
-class _RequestTile extends StatelessWidget {
-  const _RequestTile({required this.request});
+class _RequestCard extends StatelessWidget {
+  const _RequestCard({required this.request});
 
   final AttendanceRequest request;
 
@@ -167,73 +172,101 @@ class _RequestTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Card(
-      margin: EdgeInsets.zero,
-      elevation: 0,
-      color: scheme.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(AppSpacing.lg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: scheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(_iconFor(request.type),
+                      size: 22, color: scheme.onSecondaryContainer),
+                ),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
-                  child: Text(
-                    AttendanceRequestType.label(request.type),
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w700),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        AttendanceRequestType.label(request.type),
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      Text(
+                        'For ${formatDateString(request.date)}',
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: scheme.onSurfaceVariant),
+                      ),
+                    ],
                   ),
                 ),
                 StatusChip.request(request.status, dense: true),
               ],
             ),
-            const SizedBox(height: 6),
-            Text(
-              'For ${formatDateString(request.date)}',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: scheme.onSurfaceVariant),
-            ),
             if (request.requestedCheckIn != null ||
                 request.requestedCheckOut != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                [
+              const SizedBox(height: AppSpacing.md),
+              Wrap(
+                spacing: AppSpacing.sm,
+                children: [
                   if (request.requestedCheckIn != null)
-                    'In: ${formatTime(request.requestedCheckIn)}',
+                    StatusChip(
+                      label: 'In ${formatTime(request.requestedCheckIn)}',
+                      color: scheme.primary,
+                      icon: Icons.login_rounded,
+                      dense: true,
+                    ),
                   if (request.requestedCheckOut != null)
-                    'Out: ${formatTime(request.requestedCheckOut)}',
-                ].join('   ·   '),
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: scheme.onSurfaceVariant),
+                    StatusChip(
+                      label: 'Out ${formatTime(request.requestedCheckOut)}',
+                      color: scheme.primary,
+                      icon: Icons.logout_rounded,
+                      dense: true,
+                    ),
+                ],
               ),
             ],
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.md),
             Text(request.reason,
                 style: Theme.of(context).textTheme.bodyMedium),
             if ((request.reviewNote ?? '').isNotEmpty) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.md),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(AppSpacing.md),
                 decoration: BoxDecoration(
                   color: scheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: AppRadius.fieldR,
                 ),
-                child: Text(
-                  'Reviewer: ${request.reviewNote}',
-                  style: Theme.of(context).textTheme.bodySmall,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.rate_review_outlined,
+                        size: 16, color: scheme.onSurfaceVariant),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        request.reviewNote!,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
             if (request.createdAt != null) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.sm),
               Text(
                 'Submitted ${formatDateTime(request.createdAt)}',
                 style: Theme.of(context)
@@ -246,5 +279,20 @@ class _RequestTile extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  IconData _iconFor(String type) {
+    switch (type) {
+      case AttendanceRequestType.missedCheckIn:
+        return Icons.login_rounded;
+      case AttendanceRequestType.missedCheckOut:
+        return Icons.logout_rounded;
+      case AttendanceRequestType.fullDay:
+        return Icons.today_rounded;
+      case AttendanceRequestType.leave:
+        return Icons.beach_access_rounded;
+      default:
+        return Icons.event_note_rounded;
+    }
   }
 }

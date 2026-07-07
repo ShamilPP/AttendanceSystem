@@ -3,14 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../config/app_colors.dart';
 import '../models/dashboard.dart';
 import '../providers/dashboard_provider.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
 import '../utils/formats.dart';
-import '../widgets/app_feedback.dart';
-import '../widgets/stat_card.dart';
+import '../widgets/app_card.dart';
+import '../widgets/states.dart';
+import '../widgets/stat_tile.dart';
 
-/// Stat cards from /dashboard/stats + trends chart from /dashboard/trends.
+/// Stat tiles from /dashboard/stats + trends chart from /dashboard/trends.
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -31,38 +33,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<DashboardProvider>();
     final stats = provider.stats;
+    final theme = Theme.of(context);
+
+    if (provider.error != null && stats == null && !provider.loadingStats) {
+      return ErrorState(message: provider.error!, onRetry: provider.load);
+    }
 
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       children: [
         Row(
           children: [
-            Text('Today at a glance',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w700)),
-            const Spacer(),
-            IconButton(
+            Expanded(
+              child: Text('Today at a glance',
+                  style: theme.textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w700)),
+            ),
+            IconButton.filledTonal(
               tooltip: 'Refresh',
               icon: const Icon(Icons.refresh),
-              onPressed:
-                  provider.loadingStats ? null : () => provider.load(),
+              onPressed: provider.loadingStats ? null : provider.load,
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        if (provider.error != null)
-          ErrorBanner(
-              message: provider.error!, onRetry: () => provider.load()),
+        const SizedBox(height: AppSpacing.lg),
+        if (provider.error != null && stats != null)
+          ErrorBanner(message: provider.error!, onRetry: provider.load),
         if (provider.loadingStats && stats == null)
           const Padding(
-            padding: EdgeInsets.all(48),
-            child: Center(child: CircularProgressIndicator()),
+            padding: EdgeInsets.symmetric(vertical: 80),
+            child: LoadingState(message: 'Loading dashboard…'),
           )
         else if (stats != null)
           _StatsGrid(stats: stats),
-        const SizedBox(height: 20),
+        const SizedBox(height: AppSpacing.xl),
         _TrendsCard(provider: provider),
       ],
     );
@@ -77,60 +81,55 @@ class _StatsGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cards = <Widget>[
-      StatCard(
-          title: 'Total employees',
+      StatTile(
+          label: 'Total employees',
           value: '${stats.totalEmployees}',
-          icon: Icons.people_alt_outlined,
-          color: AppColors.checkedOut),
-      StatCard(
-          title: 'Present',
+          icon: Icons.groups_outlined,
+          accentColor: AppColors.seed),
+      StatTile(
+          label: 'Present',
           value: '${stats.present}',
           icon: Icons.check_circle_outline,
-          color: AppColors.present),
-      StatCard(
-          title: 'Absent',
-          value: '${stats.absent}',
-          icon: Icons.highlight_off,
-          color: AppColors.absent),
-      StatCard(
-          title: 'Late',
+          accentColor: AppColors.present),
+      StatTile(
+          label: 'Late',
           value: '${stats.late}',
           icon: Icons.schedule,
-          color: AppColors.late),
-      StatCard(
-          title: 'On leave',
+          accentColor: AppColors.late),
+      StatTile(
+          label: 'Absent',
+          value: '${stats.absent}',
+          icon: Icons.highlight_off,
+          accentColor: AppColors.absent),
+      StatTile(
+          label: 'On leave',
           value: '${stats.onLeave}',
           icon: Icons.event_busy_outlined,
-          color: AppColors.onLeave),
-      StatCard(
-          title: 'On break',
-          value: '${stats.onBreak}',
-          icon: Icons.free_breakfast_outlined,
-          color: AppColors.onBreak),
-      StatCard(
-          title: 'Checked out',
+          accentColor: AppColors.onLeave),
+      StatTile(
+          label: 'Checked out',
           value: '${stats.checkedOut}',
           icon: Icons.logout,
-          color: AppColors.checkedOut),
-      StatCard(
-          title: 'Avg work hours',
+          accentColor: AppColors.checkedOut),
+      StatTile(
+          label: 'Avg work hours',
           value: formatMinutes(stats.averageWorkMinutes),
           subtitle: 'h:mm per employee',
           icon: Icons.timelapse,
-          color: AppColors.halfDay),
-      StatCard(
-          title: 'Attendance rate',
+          accentColor: AppColors.halfDay),
+      StatTile(
+          label: 'Attendance rate',
           value: '${stats.attendanceRate.toStringAsFixed(1)}%',
-          icon: Icons.percent,
-          color: AppColors.present),
+          icon: Icons.trending_up,
+          accentColor: AppColors.present),
     ];
     return LayoutBuilder(builder: (context, constraints) {
-      final columns = (constraints.maxWidth / 250).floor().clamp(1, 5);
+      final columns = (constraints.maxWidth / 240).floor().clamp(1, 4);
       final width =
-          (constraints.maxWidth - (columns - 1) * 12) / columns;
+          (constraints.maxWidth - (columns - 1) * AppSpacing.lg) / columns;
       return Wrap(
-        spacing: 12,
-        runSpacing: 12,
+        spacing: AppSpacing.lg,
+        runSpacing: AppSpacing.lg,
         children: [
           for (final card in cards) SizedBox(width: width, child: card),
         ],
@@ -147,56 +146,50 @@ class _TrendsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: theme.colorScheme.outlineVariant),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(
-              spacing: 16,
-              runSpacing: 10,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text('Attendance trends',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700)),
-                SegmentedButton<String>(
-                  showSelectedIcon: false,
-                  style: const ButtonStyle(
-                      visualDensity: VisualDensity.compact),
-                  segments: const [
-                    ButtonSegment(value: 'daily', label: Text('Daily')),
-                    ButtonSegment(value: 'weekly', label: Text('Weekly')),
-                    ButtonSegment(value: 'monthly', label: Text('Monthly')),
-                  ],
-                  selected: {provider.period},
-                  onSelectionChanged: (selection) =>
-                      provider.setPeriod(selection.first),
-                ),
-                const _Legend(),
-              ],
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              height: 320,
-              child: provider.loadingTrends
-                  ? const Center(child: CircularProgressIndicator())
-                  : provider.points.isEmpty
-                      ? const EmptyState(
-                          message: 'No trend data yet.',
-                          icon: Icons.bar_chart)
-                      : _TrendsChart(
-                          points: provider.points,
-                          period: provider.period),
-            ),
-          ],
-        ),
+    return AppCard(
+      elevated: true,
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: AppSpacing.lg,
+            runSpacing: AppSpacing.md,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text('Attendance trends',
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700)),
+              SegmentedButton<String>(
+                showSelectedIcon: false,
+                style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                segments: const [
+                  ButtonSegment(value: 'daily', label: Text('Daily')),
+                  ButtonSegment(value: 'weekly', label: Text('Weekly')),
+                  ButtonSegment(value: 'monthly', label: Text('Monthly')),
+                ],
+                selected: {provider.period},
+                onSelectionChanged: (selection) =>
+                    provider.setPeriod(selection.first),
+              ),
+              const _Legend(),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          SizedBox(
+            height: 320,
+            child: provider.loadingTrends
+                ? const LoadingState()
+                : provider.points.isEmpty
+                    ? const EmptyState(
+                        title: 'No trend data yet',
+                        message:
+                            'Attendance trends will appear here once records start coming in.',
+                        icon: Icons.bar_chart)
+                    : _TrendsChart(
+                        points: provider.points, period: provider.period),
+          ),
+        ],
       ),
     );
   }
@@ -207,25 +200,23 @@ class _Legend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     Widget item(Color color, String label) => Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
               width: 10,
               height: 10,
-              decoration:
-                  BoxDecoration(color: color, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
-            const SizedBox(width: 5),
+            const SizedBox(width: 6),
             Text(label,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: AppColors.axisLabel)),
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
           ],
         );
     return Wrap(
-      spacing: 14,
+      spacing: AppSpacing.lg,
       children: [
         item(AppColors.present, 'Present'),
         item(AppColors.late, 'Late'),
@@ -252,17 +243,12 @@ class _TrendsChart extends StatelessWidget {
   String _shortLabel(String label) {
     switch (period) {
       case 'daily':
-        // YYYY-MM-DD -> dd MMM
         final d = DateTime.tryParse(label);
-        return d == null
-            ? label
-            : DateFormat('d MMM').format(d);
+        return d == null ? label : DateFormat('d MMM').format(d);
       case 'weekly':
-        // 2026-W27 -> W27
         final i = label.indexOf('W');
         return i >= 0 ? label.substring(i) : label;
       case 'monthly':
-        // 2026-07 -> Jul
         final d = DateTime.tryParse('$label-01');
         return d == null ? label : DateFormat('MMM').format(d);
       default:
@@ -272,6 +258,12 @@ class _TrendsChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final gridColor = theme.colorScheme.outlineVariant;
+    final axisColor = theme.colorScheme.onSurfaceVariant;
+    final tooltipBg = theme.colorScheme.inverseSurface;
+    final tooltipFg = theme.colorScheme.onInverseSurface;
+
     var maxValue = 0;
     for (final p in points) {
       for (final v in [p.present, p.late, p.absent]) {
@@ -279,9 +271,7 @@ class _TrendsChart extends StatelessWidget {
       }
     }
     final maxY = (maxValue <= 5 ? 5 : ((maxValue / 5).ceil() * 5)).toDouble();
-    // maxY is always >= 5, so this interval is always >= 1.
     final yInterval = (maxY / 5).ceilToDouble();
-    // Skip alternate bottom labels when the axis gets crowded.
     final labelStep = points.length > 9 ? 2 : 1;
 
     return BarChart(
@@ -293,7 +283,7 @@ class _TrendsChart extends StatelessWidget {
           drawVerticalLine: false,
           horizontalInterval: yInterval,
           getDrawingHorizontalLine: (_) =>
-              const FlLine(color: AppColors.gridLine, strokeWidth: 1),
+              FlLine(color: gridColor, strokeWidth: 1),
         ),
         borderData: FlBorderData(show: false),
         titlesData: FlTitlesData(
@@ -302,8 +292,8 @@ class _TrendsChart extends StatelessWidget {
           rightTitles:
               const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           leftTitles: AxisTitles(
-            axisNameWidget: const Text('Employees',
-                style: TextStyle(color: AppColors.axisLabel, fontSize: 11)),
+            axisNameWidget: Text('Employees',
+                style: TextStyle(color: axisColor, fontSize: 11)),
             sideTitles: SideTitles(
               showTitles: true,
               reservedSize: 32,
@@ -312,8 +302,7 @@ class _TrendsChart extends StatelessWidget {
                 padding: const EdgeInsets.only(right: 6),
                 child: Text(
                   value.toInt().toString(),
-                  style: const TextStyle(
-                      color: AppColors.axisLabel, fontSize: 11),
+                  style: TextStyle(color: axisColor, fontSize: 11),
                 ),
               ),
             ),
@@ -331,8 +320,7 @@ class _TrendsChart extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
                     _shortLabel(points[i].label),
-                    style: const TextStyle(
-                        color: AppColors.axisLabel, fontSize: 11),
+                    style: TextStyle(color: axisColor, fontSize: 11),
                   ),
                 );
               },
@@ -341,23 +329,22 @@ class _TrendsChart extends StatelessWidget {
         ),
         barTouchData: BarTouchData(
           touchTooltipData: BarTouchTooltipData(
-            getTooltipColor: (_) => AppColors.tooltipBg,
+            getTooltipColor: (_) => tooltipBg,
             fitInsideHorizontally: true,
             fitInsideVertically: true,
             getTooltipItem: (group, groupIndex, rod, rodIndex) {
               final point = points[group.x.toInt()];
               return BarTooltipItem(
                 '${point.label}\n',
-                const TextStyle(
-                    color: Colors.white,
+                TextStyle(
+                    color: tooltipFg,
                     fontWeight: FontWeight.w700,
                     fontSize: 12),
                 children: [
                   TextSpan(
-                    text:
-                        '${_seriesNames[rodIndex]}: ${rod.toY.toInt()}',
-                    style: const TextStyle(
-                        color: Colors.white,
+                    text: '${_seriesNames[rodIndex]}: ${rod.toY.toInt()}',
+                    style: TextStyle(
+                        color: tooltipFg,
                         fontWeight: FontWeight.w400,
                         fontSize: 12),
                   ),
@@ -382,8 +369,8 @@ class _TrendsChart extends StatelessWidget {
                         .toDouble(),
                     color: _seriesColors[s],
                     width: period == 'daily' ? 6 : 10,
-                    borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(3)),
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(3)),
                   ),
               ],
             ),

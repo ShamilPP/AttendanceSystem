@@ -64,13 +64,11 @@ async function aggregateRange(employees, fromStr, toStr, todayStr) {
     let lateDays = 0;
     let leaveDays = 0;
     let totalWorkMinutes = 0;
-    let totalBreakMinutes = 0;
     for (const r of recs) {
       if (PRESENT_STATUSES.includes(r.status)) presentDays += 1;
       if (r.isLate) lateDays += 1;
       if (r.status === 'ON_LEAVE') leaveDays += 1;
       totalWorkMinutes += r.workMinutes || 0;
-      totalBreakMinutes += r.breakMinutes || 0;
     }
     return {
       employeeId: emp.employeeId,
@@ -81,7 +79,6 @@ async function aggregateRange(employees, fromStr, toStr, todayStr) {
       absentDays: Math.max(0, workingDays - presentDays - leaveDays),
       leaveDays,
       totalWorkMinutes,
-      totalBreakMinutes,
     };
   });
 }
@@ -95,7 +92,6 @@ const AGGREGATE_COLUMNS = [
   { header: 'Absent Days', key: 'absentDays', width: 12 },
   { header: 'Leave Days', key: 'leaveDays', width: 12 },
   { header: 'Total Work Minutes', key: 'totalWorkMinutes', width: 18 },
-  { header: 'Total Break Minutes', key: 'totalBreakMinutes', width: 18 },
 ];
 
 // GET /reports/attendance
@@ -136,7 +132,6 @@ const attendanceReport = asyncHandler(async (req, res) => {
         checkIn: r && r.checkIn ? r.checkIn.toISOString() : null,
         checkOut: r && r.checkOut ? r.checkOut.toISOString() : null,
         workMinutes: r ? r.workMinutes : 0,
-        breakMinutes: r ? r.breakMinutes : 0,
         isLate: r ? r.isLate : false,
         isEarlyOut: r ? r.isEarlyOut : false,
       };
@@ -155,7 +150,6 @@ const attendanceReport = asyncHandler(async (req, res) => {
       { header: 'Check In', key: 'checkIn', width: 12 },
       { header: 'Check Out', key: 'checkOut', width: 12 },
       { header: 'Work Minutes', key: 'workMinutes', width: 14 },
-      { header: 'Break Minutes', key: 'breakMinutes', width: 14 },
       { header: 'Late', key: 'isLate', width: 8 },
       { header: 'Early Out', key: 'isEarlyOut', width: 10 },
     ];
@@ -236,11 +230,9 @@ const workingHoursReport = asyncHandler(async (req, res) => {
   const rows = employees.map((emp) => {
     const recs = byEmployee.get(String(emp._id)) || [];
     let totalWorkMinutes = 0;
-    let totalBreakMinutes = 0;
     let daysWorked = 0;
     for (const r of recs) {
       totalWorkMinutes += r.workMinutes || 0;
-      totalBreakMinutes += r.breakMinutes || 0;
       if (r.checkIn) daysWorked += 1;
     }
     return {
@@ -248,7 +240,6 @@ const workingHoursReport = asyncHandler(async (req, res) => {
       name: emp.name,
       department: departmentName(emp),
       totalWorkMinutes,
-      totalBreakMinutes,
       averageWorkMinutes: daysWorked > 0 ? Math.round(totalWorkMinutes / daysWorked) : 0,
       daysWorked,
     };
@@ -263,7 +254,6 @@ const workingHoursReport = asyncHandler(async (req, res) => {
     { header: 'Name', key: 'name', width: 24 },
     { header: 'Department', key: 'department', width: 20 },
     { header: 'Total Work Minutes', key: 'totalWorkMinutes', width: 18 },
-    { header: 'Total Break Minutes', key: 'totalBreakMinutes', width: 18 },
     { header: 'Average Work Minutes', key: 'averageWorkMinutes', width: 20 },
     { header: 'Days Worked', key: 'daysWorked', width: 12 },
   ];

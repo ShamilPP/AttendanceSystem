@@ -5,11 +5,17 @@ import '../models/attendance.dart';
 import '../models/user.dart';
 import '../providers/attendance_logs_provider.dart';
 import '../services/api_client.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
 import '../utils/formats.dart';
+import '../widgets/app_avatar.dart';
+import '../widgets/app_button.dart';
+import '../widgets/app_card.dart';
 import '../widgets/app_feedback.dart';
 import '../widgets/employee_autocomplete.dart';
 import '../widgets/pagination_bar.dart';
 import '../widgets/picker_fields.dart';
+import '../widgets/states.dart';
 import '../widgets/status_chip.dart';
 import '../widgets/table_wrapper.dart';
 
@@ -63,147 +69,152 @@ class _AttendanceLogsScreenState extends State<AttendanceLogsScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AttendanceLogsProvider>();
-    final theme = Theme.of(context);
 
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              SizedBox(
-                width: 300,
-                child: EmployeeAutocomplete(
-                  key: ValueKey(provider.employee?.id ?? 'none'),
-                  initial: provider.employee,
-                  onSelected: (user) => provider.applyFilters(
-                    employee: user,
-                    from: provider.from,
-                    to: provider.to,
-                    status: provider.status,
+          AppCard(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Wrap(
+              spacing: AppSpacing.md,
+              runSpacing: AppSpacing.md,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                SizedBox(
+                  width: 300,
+                  child: EmployeeAutocomplete(
+                    key: ValueKey(provider.employee?.id ?? 'none'),
+                    initial: provider.employee,
+                    onSelected: (user) => provider.applyFilters(
+                      employee: user,
+                      from: provider.from,
+                      to: provider.to,
+                      status: provider.status,
+                    ),
                   ),
                 ),
-              ),
-              SizedBox(
-                width: 170,
-                child: DatePickerField(
-                  key: ValueKey('logs-from-${provider.from}'),
-                  label: 'From',
-                  value: provider.from,
-                  allowClear: true,
-                  onChanged: (d) => provider.applyFilters(
-                    employee: provider.employee,
-                    from: d,
-                    to: provider.to,
-                    status: provider.status,
+                SizedBox(
+                  width: 170,
+                  child: DatePickerField(
+                    key: ValueKey('logs-from-${provider.from}'),
+                    label: 'From',
+                    value: provider.from,
+                    allowClear: true,
+                    onChanged: (d) => provider.applyFilters(
+                      employee: provider.employee,
+                      from: d,
+                      to: provider.to,
+                      status: provider.status,
+                    ),
                   ),
                 ),
-              ),
-              SizedBox(
-                width: 170,
-                child: DatePickerField(
-                  key: ValueKey('logs-to-${provider.to}'),
-                  label: 'To',
-                  value: provider.to,
-                  allowClear: true,
-                  onChanged: (d) => provider.applyFilters(
-                    employee: provider.employee,
-                    from: provider.from,
-                    to: d,
-                    status: provider.status,
+                SizedBox(
+                  width: 170,
+                  child: DatePickerField(
+                    key: ValueKey('logs-to-${provider.to}'),
+                    label: 'To',
+                    value: provider.to,
+                    allowClear: true,
+                    onChanged: (d) => provider.applyFilters(
+                      employee: provider.employee,
+                      from: provider.from,
+                      to: d,
+                      status: provider.status,
+                    ),
                   ),
                 ),
-              ),
-              SizedBox(
-                width: 170,
-                child: DropdownButtonFormField<String?>(
-                  key: ValueKey('logs-status-${provider.status}'),
-                  initialValue: provider.status,
-                  decoration: const InputDecoration(
-                    labelText: 'Status',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  items: [
-                    const DropdownMenuItem<String?>(
-                        value: null, child: Text('All statuses')),
-                    for (final s in kAttendanceStatuses)
-                      DropdownMenuItem<String?>(
-                          value: s, child: Text(s)),
-                  ],
-                  onChanged: (s) => provider.applyFilters(
-                    employee: provider.employee,
-                    from: provider.from,
-                    to: provider.to,
-                    status: s,
+                SizedBox(
+                  width: 170,
+                  child: DropdownButtonFormField<String?>(
+                    key: ValueKey('logs-status-${provider.status}'),
+                    initialValue: provider.status,
+                    decoration: const InputDecoration(labelText: 'Status'),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                          value: null, child: Text('All statuses')),
+                      for (final s in kAttendanceStatuses)
+                        DropdownMenuItem<String?>(
+                            value: s, child: Text(_statusLabel(s))),
+                    ],
+                    onChanged: (s) => provider.applyFilters(
+                      employee: provider.employee,
+                      from: provider.from,
+                      to: provider.to,
+                      status: s,
+                    ),
                   ),
                 ),
-              ),
-              TextButton.icon(
-                icon: const Icon(Icons.filter_alt_off_outlined, size: 18),
-                label: const Text('Clear filters'),
-                onPressed: () => provider.applyFilters(
-                    employee: null, from: null, to: null, status: null),
-              ),
-              FilledButton.tonalIcon(
-                icon: const Icon(Icons.post_add, size: 18),
-                label: const Text('Manual Entry'),
-                onPressed: _openManualEntry,
-              ),
-            ],
+                AppButton(
+                  label: 'Clear',
+                  variant: AppButtonVariant.text,
+                  icon: Icons.filter_alt_off_outlined,
+                  onPressed: () => provider.applyFilters(
+                      employee: null, from: null, to: null, status: null),
+                ),
+                AppButton.tonal(
+                  label: 'Manual Entry',
+                  icon: Icons.post_add,
+                  onPressed: _openManualEntry,
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: AppSpacing.lg),
           if (provider.error != null)
             ErrorBanner(
                 message: provider.error!, onRetry: () => provider.fetch()),
           Expanded(
             child: provider.loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const LoadingState(message: 'Loading records…')
                 : provider.records.isEmpty
                     ? const EmptyState(
+                        title: 'No records found',
                         message:
                             'No attendance records match the current filters.',
                         icon: Icons.receipt_long_outlined)
-                    : TableWrapper(
-                        child: DataTable(
-                          headingTextStyle: theme.textTheme.bodySmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                          columns: const [
-                            DataColumn(label: Text('Date')),
-                            DataColumn(label: Text('Employee')),
-                            DataColumn(label: Text('Check-in')),
-                            DataColumn(label: Text('Check-out')),
-                            DataColumn(label: Text('Work (h:mm)')),
-                            DataColumn(label: Text('Break (h:mm)')),
-                            DataColumn(label: Text('Status')),
-                            DataColumn(label: Text('Flags')),
-                            DataColumn(label: Text('Actions')),
-                          ],
-                          rows: [
-                            for (final r in provider.records)
-                              DataRow(cells: [
-                                DataCell(Text(r.date)),
-                                DataCell(Text(r.employee == null
-                                    ? '—'
-                                    : '${r.employee!.employeeId} · ${r.employee!.name}')),
-                                DataCell(Text(formatTime(r.checkIn))),
-                                DataCell(Text(formatTime(r.checkOut))),
-                                DataCell(Text(formatMinutes(r.workMinutes))),
-                                DataCell(Text(formatMinutes(r.breakMinutes))),
-                                DataCell(StatusChip.attendance(r.status)),
-                                DataCell(_FlagIcons(record: r)),
-                                DataCell(TextButton.icon(
-                                  icon: const Icon(Icons.edit_outlined,
-                                      size: 16),
-                                  label: const Text('Correct'),
-                                  onPressed: () => _openCorrect(r),
-                                )),
-                              ]),
-                          ],
+                    : AppCard(
+                        padding: EdgeInsets.zero,
+                        child: ClipRRect(
+                          borderRadius: AppRadius.cardR,
+                          child: TableWrapper(
+                            child: DataTable(
+                              columns: const [
+                                DataColumn(label: Text('Date')),
+                                DataColumn(label: Text('Employee')),
+                                DataColumn(label: Text('Check-in')),
+                                DataColumn(label: Text('Check-out')),
+                                DataColumn(label: Text('Work (h:mm)')),
+                                DataColumn(label: Text('Status')),
+                                DataColumn(label: Text('Flags')),
+                                DataColumn(label: Text('Actions')),
+                              ],
+                              rows: [
+                                for (final r in provider.records)
+                                  DataRow(cells: [
+                                    DataCell(Text(r.date)),
+                                    DataCell(r.employee == null
+                                        ? const Text('—')
+                                        : EmployeeCell(
+                                            name: r.employee!.name,
+                                            subtitle: r.employee!.employeeId,
+                                          )),
+                                    DataCell(Text(formatTime(r.checkIn))),
+                                    DataCell(Text(formatTime(r.checkOut))),
+                                    DataCell(Text(formatMinutes(r.workMinutes))),
+                                    DataCell(StatusChip.attendance(r.status)),
+                                    DataCell(_FlagIcons(record: r)),
+                                    DataCell(AppButton(
+                                      label: 'Correct',
+                                      variant: AppButtonVariant.text,
+                                      icon: Icons.edit_outlined,
+                                      onPressed: () => _openCorrect(r),
+                                    )),
+                                  ]),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
           ),
@@ -214,6 +225,23 @@ class _AttendanceLogsScreenState extends State<AttendanceLogsScreen> {
         ],
       ),
     );
+  }
+}
+
+String _statusLabel(String status) {
+  switch (status) {
+    case 'PRESENT':
+      return 'Present';
+    case 'LATE':
+      return 'Late';
+    case 'ABSENT':
+      return 'Absent';
+    case 'ON_LEAVE':
+      return 'On leave';
+    case 'HALF_DAY':
+      return 'Half day';
+    default:
+      return status;
   }
 }
 
@@ -228,19 +256,20 @@ class _FlagIcons extends StatelessWidget {
       if (record.isLate)
         const Tooltip(
           message: 'Late arrival',
-          child: Icon(Icons.schedule, size: 18, color: Color(0xFFCF7500)),
+          child: Icon(Icons.schedule, size: 18, color: AppColors.late),
         ),
       if (record.isEarlyOut)
         const Tooltip(
           message: 'Early check-out',
           child:
-              Icon(Icons.directions_run, size: 18, color: Color(0xFFCF7500)),
+              Icon(Icons.directions_run, size: 18, color: AppColors.late),
         ),
       if (record.correction != null)
         Tooltip(
           message:
               'Corrected by admin${record.correction!.note == null ? '' : ': ${record.correction!.note}'}',
-          child: const Icon(Icons.edit_note, size: 18, color: Colors.grey),
+          child: Icon(Icons.edit_note,
+              size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
     ];
     if (icons.isEmpty) return const Text('—');
@@ -256,7 +285,7 @@ class _FlagIcons extends StatelessWidget {
   }
 }
 
-/// Dialog for `PUT /attendance/:id/correct` — note is required.
+/// Dialog for `PUT /attendance/:id/correct` — note is required, no breaks.
 class _CorrectDialog extends StatefulWidget {
   const _CorrectDialog({required this.record, required this.provider});
 
@@ -342,7 +371,7 @@ class _CorrectDialogState extends State<_CorrectDialog> {
                     .bodyMedium
                     ?.copyWith(fontWeight: FontWeight.w600),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               Row(children: [
                 Expanded(
                   child: TimePickerField(
@@ -352,7 +381,7 @@ class _CorrectDialogState extends State<_CorrectDialog> {
                     onChanged: (t) => setState(() => _checkIn = t),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: TimePickerField(
                     label: 'Check-out',
@@ -362,32 +391,26 @@ class _CorrectDialogState extends State<_CorrectDialog> {
                   ),
                 ),
               ]),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               DropdownButtonFormField<String>(
                 initialValue: _status,
-                decoration: const InputDecoration(
-                  labelText: 'Status',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
+                decoration: const InputDecoration(labelText: 'Status'),
                 items: [
                   for (final s in kAttendanceStatuses)
-                    DropdownMenuItem(value: s, child: Text(s)),
+                    DropdownMenuItem(value: s, child: Text(_statusLabel(s))),
                 ],
-                onChanged: (s) =>
-                    setState(() => _status = s ?? _status),
+                onChanged: (s) => setState(() => _status = s ?? _status),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               TextField(
                 controller: _noteController,
                 maxLines: 2,
                 decoration: const InputDecoration(
                   labelText: 'Correction note (required)',
-                  border: OutlineInputBorder(),
                 ),
               ),
               if (_error != null) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpacing.md),
                 Text(_error!,
                     style:
                         TextStyle(color: Theme.of(context).colorScheme.error)),
@@ -401,14 +424,10 @@ class _CorrectDialogState extends State<_CorrectDialog> {
           onPressed: _saving ? null : () => Navigator.of(context).pop(false),
           child: const Text('Cancel'),
         ),
-        FilledButton(
-          onPressed: _saving ? null : _save,
-          child: _saving
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2))
-              : const Text('Save correction'),
+        AppButton(
+          label: 'Save correction',
+          loading: _saving,
+          onPressed: _save,
         ),
       ],
     );
@@ -498,36 +517,31 @@ class _ManualEntryDialogState extends State<_ManualEntryDialog> {
               EmployeeAutocomplete(
                 onSelected: (u) => setState(() => _employee = u),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               Row(children: [
                 Expanded(
                   child: DatePickerField(
                     label: 'Date',
                     value: _date,
                     lastDate: DateTime.now(),
-                    onChanged: (d) =>
-                        setState(() => _date = d ?? _date),
+                    onChanged: (d) => setState(() => _date = d ?? _date),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     initialValue: _status,
-                    decoration: const InputDecoration(
-                      labelText: 'Status',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
+                    decoration: const InputDecoration(labelText: 'Status'),
                     items: [
                       for (final s in kAttendanceStatuses)
-                        DropdownMenuItem(value: s, child: Text(s)),
+                        DropdownMenuItem(
+                            value: s, child: Text(_statusLabel(s))),
                     ],
-                    onChanged: (s) =>
-                        setState(() => _status = s ?? _status),
+                    onChanged: (s) => setState(() => _status = s ?? _status),
                   ),
                 ),
               ]),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               Row(children: [
                 Expanded(
                   child: TimePickerField(
@@ -538,7 +552,7 @@ class _ManualEntryDialogState extends State<_ManualEntryDialog> {
                     onChanged: (t) => setState(() => _checkIn = t),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: TimePickerField(
                     label: 'Check-out (optional)',
@@ -558,17 +572,15 @@ class _ManualEntryDialogState extends State<_ManualEntryDialog> {
                         color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
                 ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               TextField(
                 controller: _noteController,
                 maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Note (required)',
-                  border: OutlineInputBorder(),
-                ),
+                decoration:
+                    const InputDecoration(labelText: 'Note (required)'),
               ),
               if (_error != null) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpacing.md),
                 Text(_error!,
                     style:
                         TextStyle(color: Theme.of(context).colorScheme.error)),
@@ -582,14 +594,10 @@ class _ManualEntryDialogState extends State<_ManualEntryDialog> {
           onPressed: _saving ? null : () => Navigator.of(context).pop(false),
           child: const Text('Cancel'),
         ),
-        FilledButton(
-          onPressed: _saving ? null : _save,
-          child: _saving
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2))
-              : const Text('Create entry'),
+        AppButton(
+          label: 'Create entry',
+          loading: _saving,
+          onPressed: _save,
         ),
       ],
     );

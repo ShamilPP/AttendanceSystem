@@ -8,7 +8,6 @@ class DashboardStats {
     this.absent = 0,
     this.late = 0,
     this.onLeave = 0,
-    this.onBreak = 0,
     this.checkedOut = 0,
     this.averageWorkMinutes = 0,
     this.attendanceRate = 0,
@@ -19,7 +18,6 @@ class DashboardStats {
   final int absent;
   final int late;
   final int onLeave;
-  final int onBreak;
   final int checkedOut;
   final int averageWorkMinutes;
   final double attendanceRate; // 0-100
@@ -32,7 +30,6 @@ class DashboardStats {
       absent: jsonInt(map['absent']),
       late: jsonInt(map['late']),
       onLeave: jsonInt(map['onLeave']),
-      onBreak: jsonInt(map['onBreak']),
       checkedOut: jsonInt(map['checkedOut']),
       averageWorkMinutes: jsonInt(map['averageWorkMinutes']),
       attendanceRate: jsonDouble(map['attendanceRate']),

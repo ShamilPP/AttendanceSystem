@@ -9,7 +9,11 @@ import 'package:provider/provider.dart';
 import '../models/document.dart';
 import '../providers/documents_provider.dart';
 import '../services/api_client.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
 import '../utils/formatters.dart';
+import '../widgets/app_button.dart';
+import '../widgets/app_text_field.dart';
 import '../widgets/async_states.dart';
 
 const int _maxUploadBytes = 10 * 1024 * 1024; // 10 MB
@@ -50,11 +54,22 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   Future<void> _startUpload() async {
     final source = await showModalBottomSheet<String>(
       context: context,
-      showDragHandle: true,
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xl, AppSpacing.sm, AppSpacing.xl, AppSpacing.sm),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Upload a document',
+                    style: Theme.of(sheetContext)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700)),
+              ),
+            ),
             ListTile(
               leading: const Icon(Icons.description_outlined),
               title: const Text('Choose a file'),
@@ -67,6 +82,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
               subtitle: const Text('Photo of a document or ID card'),
               onTap: () => Navigator.of(sheetContext).pop('image'),
             ),
+            const SizedBox(height: AppSpacing.sm),
           ],
         ),
       ),
@@ -154,9 +170,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(dialogContext).colorScheme.error,
-            ),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: const Text('Delete'),
           ),
@@ -179,9 +193,9 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
 
     Widget body;
     if (provider.loading && !provider.loaded) {
-      body = const LoadingView(message: 'Loading documents…');
+      body = const LoadingState(message: 'Loading documents…');
     } else if (provider.error != null && provider.documents.isEmpty) {
-      body = ErrorView(message: provider.error!, onRetry: provider.load);
+      body = ErrorState(message: provider.error!, onRetry: provider.load);
     } else if (provider.documents.isEmpty) {
       body = RefreshIndicator(
         onRefresh: provider.load,
@@ -190,11 +204,17 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             child: SizedBox(
               height: constraints.maxHeight,
-              child: const EmptyView(
+              child: EmptyState(
                 icon: Icons.folder_open_rounded,
-                title: 'No documents uploaded',
-                subtitle: 'Upload your ID proof or company ID card '
-                    'using the button below.',
+                title: 'No documents yet',
+                message: 'Upload your ID proof or company ID card using the '
+                    'button below.',
+                action: AppButton(
+                  label: 'Upload document',
+                  icon: Icons.upload_file_rounded,
+                  expand: false,
+                  onPressed: provider.uploading ? null : _startUpload,
+                ),
               ),
             ),
           ),
@@ -205,12 +225,14 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         onRefresh: provider.load,
         child: ListView.separated(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+          padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 96),
           itemCount: provider.documents.length,
-          separatorBuilder: (context, index) => const SizedBox(height: 8),
+          separatorBuilder: (context, index) =>
+              const SizedBox(height: AppSpacing.md),
           itemBuilder: (context, index) {
             final doc = provider.documents[index];
-            return _DocumentTile(
+            return _DocumentCard(
               doc: doc,
               onDownload: () => _download(doc),
               onDelete: () => _delete(doc),
@@ -238,8 +260,8 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   }
 }
 
-class _DocumentTile extends StatelessWidget {
-  const _DocumentTile({
+class _DocumentCard extends StatelessWidget {
+  const _DocumentCard({
     required this.doc,
     required this.onDownload,
     required this.onDelete,
@@ -252,30 +274,28 @@ class _DocumentTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final accent = doc.isPdf ? AppColors.danger : AppColors.info;
     return Card(
-      margin: EdgeInsets.zero,
-      elevation: 0,
-      color: scheme.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md, vertical: AppSpacing.md),
         child: Row(
           children: [
             Container(
-              width: 44,
-              height: 44,
+              width: 46,
+              height: 46,
               decoration: BoxDecoration(
-                color: scheme.primaryContainer,
+                color: accent.withValues(alpha: AppColors.tint),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
                 doc.isPdf
                     ? Icons.picture_as_pdf_outlined
                     : Icons.image_outlined,
-                color: scheme.onPrimaryContainer,
+                color: accent,
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -312,7 +332,8 @@ class _DocumentTile extends StatelessWidget {
             IconButton(
               tooltip: 'Delete',
               onPressed: onDelete,
-              icon: Icon(Icons.delete_outline_rounded, color: scheme.error),
+              icon: const Icon(Icons.delete_outline_rounded,
+                  color: AppColors.danger),
             ),
           ],
         ),
@@ -359,20 +380,22 @@ class _UploadDetailsDialogState extends State<_UploadDetailsDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextFormField(
+            AppTextField(
+              label: 'Document name',
               controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: 'Document name',
-                hintText: 'e.g. Passport',
-              ),
+              hint: 'e.g. Passport',
+              prefixIcon: Icons.title_rounded,
               validator: (value) => (value == null || value.trim().isEmpty)
                   ? 'A name is required'
                   : null,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.lg),
             DropdownButtonFormField<String>(
               initialValue: _type,
-              decoration: const InputDecoration(labelText: 'Type'),
+              decoration: const InputDecoration(
+                labelText: 'Type',
+                prefixIcon: Icon(Icons.category_outlined),
+              ),
               items: [
                 for (final type in DocumentType.all)
                   DropdownMenuItem(
@@ -384,13 +407,26 @@ class _UploadDetailsDialogState extends State<_UploadDetailsDialog> {
                 if (value != null) setState(() => _type = value);
               },
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.md),
             Align(
               alignment: Alignment.centerLeft,
-              child: Text(
-                widget.fileName,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+              child: Row(
+                children: [
+                  Icon(Icons.attach_file_rounded,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      widget.fileName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -404,8 +440,7 @@ class _UploadDetailsDialogState extends State<_UploadDetailsDialog> {
         FilledButton(
           onPressed: () {
             if (!(_formKey.currentState?.validate() ?? false)) return;
-            Navigator.of(context)
-                .pop((_nameController.text.trim(), _type));
+            Navigator.of(context).pop((_nameController.text.trim(), _type));
           },
           child: const Text('Upload'),
         ),

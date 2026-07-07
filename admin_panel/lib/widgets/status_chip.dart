@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../config/app_colors.dart';
+import '../theme/app_colors.dart';
 
-/// Small colored chip: dot + label. Identity is never color-alone —
-/// the label always names the status.
+/// Soft tinted pill: dot + label. Identity is never color-alone — the label
+/// always names the status, and the hue is tuned for contrast in both themes.
 class StatusChip extends StatelessWidget {
   const StatusChip({super.key, required this.label, required this.color});
 
@@ -14,7 +14,7 @@ class StatusChip extends StatelessWidget {
         color: AppColors.forAttendanceStatus(status),
       );
 
-  /// Live status: NOT_IN | WORKING | ON_BREAK | CHECKED_OUT | ON_LEAVE.
+  /// Live status: NOT_IN | WORKING | CHECKED_OUT | ON_LEAVE.
   factory StatusChip.live(String status, {Key? key}) => StatusChip(
         key: key,
         label: _liveLabel(status),
@@ -54,8 +54,6 @@ class StatusChip extends StatelessWidget {
         return 'Not in';
       case 'WORKING':
         return 'Working';
-      case 'ON_BREAK':
-        return 'On break';
       case 'CHECKED_OUT':
         return 'Checked out';
       case 'ON_LEAVE':
@@ -80,10 +78,12 @@ class StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    final fg = AppColors.onTint(color, brightness);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
+        color: color.withValues(alpha: brightness == Brightness.dark ? 0.20 : 0.12),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
@@ -99,7 +99,7 @@ class StatusChip extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              color: Color.lerp(color, Colors.black, 0.25),
+              color: fg,
               fontSize: 12.5,
               fontWeight: FontWeight.w600,
             ),
@@ -110,44 +110,53 @@ class StatusChip extends StatelessWidget {
   }
 }
 
-/// Count chip used in summary rows (live board, requests header).
+/// Count chip used in summary rows (live board, requests header, import result).
 class CountChip extends StatelessWidget {
   const CountChip({
     super.key,
     required this.label,
     required this.count,
     required this.color,
+    this.icon,
   });
 
   final String label;
   final int count;
   final Color color;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    final fg = AppColors.onTint(color, brightness);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.30)),
+        color: color.withValues(alpha: brightness == Brightness.dark ? 0.16 : 0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (icon != null) ...[
+            Icon(icon, size: 15, color: fg),
+            const SizedBox(width: 7),
+          ],
           Text(
             '$count',
             style: TextStyle(
-              color: Color.lerp(color, Colors.black, 0.25),
+              color: fg,
               fontWeight: FontWeight.w800,
               fontSize: 16,
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
           const SizedBox(width: 6),
           Text(
             label,
             style: TextStyle(
-              color: Color.lerp(color, Colors.black, 0.35),
+              color: fg.withValues(alpha: 0.9),
               fontWeight: FontWeight.w500,
               fontSize: 13,
             ),

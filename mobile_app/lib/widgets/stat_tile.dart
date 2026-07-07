@@ -1,60 +1,67 @@
 import 'package:flutter/material.dart';
 
-/// A compact stat card used on the monthly summary screen.
+import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
+
+/// A compact stat card: an accent icon badge, a large number, and a label.
+/// Used on the monthly summary and any dashboard-style grid.
 class StatTile extends StatelessWidget {
   const StatTile({
     super.key,
     required this.label,
     required this.value,
     required this.icon,
-    this.color,
+    this.accentColor,
   });
 
   final String label;
   final String value;
   final IconData icon;
-  final Color? color;
+  final Color? accentColor;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final accent = color ?? scheme.primary;
+    final accent = accentColor ?? scheme.primary;
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(16),
+        color: scheme.surface,
+        borderRadius: AppRadius.cardR,
+        border: Border.all(color: scheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Icon(icon, size: 18, color: accent),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context)
-                      .textTheme
-                      .labelMedium
-                      ?.copyWith(color: scheme.onSurfaceVariant),
-                ),
-              ),
-            ],
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: AppColors.tint),
+              borderRadius: const BorderRadius.all(Radius.circular(12)),
+            ),
+            child: Icon(icon, size: 22, color: accent),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.md),
           Text(
             value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  height: 1.0,
+                ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: Theme.of(context)
                 .textTheme
-                .titleLarge
-                ?.copyWith(fontWeight: FontWeight.w700, color: accent),
+                .bodySmall
+                ?.copyWith(color: scheme.onSurfaceVariant),
           ),
         ],
       ),

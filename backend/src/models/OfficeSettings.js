@@ -8,7 +8,6 @@ const DEFAULTS = {
   workEndTime: '18:00',
   lateToleranceMinutes: 10,
   earlyLeaveToleranceMinutes: 10,
-  qrRefreshSeconds: 30,
   timezone: 'Asia/Dubai',
 };
 
@@ -25,7 +24,6 @@ const officeSettingsSchema = new mongoose.Schema(
       required: true,
       default: DEFAULTS.earlyLeaveToleranceMinutes,
     },
-    qrRefreshSeconds: { type: Number, required: true, default: DEFAULTS.qrRefreshSeconds },
     timezone: { type: String, required: true, default: DEFAULTS.timezone },
   },
   { timestamps: true, toJSON: { versionKey: false } }

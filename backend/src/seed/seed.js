@@ -4,7 +4,8 @@
  * Creates:
  *  - admin:          admin@company.com / Admin@123
  *  - office settings: lat 25.1972, lng 55.2744, radius 150m, 09:00-18:00,
- *                     10 min tolerances, QR refresh 30s, Asia/Dubai
+ *                     10 min tolerances, Asia/Dubai
+ *  - an initial permanent QR code (version 1)
  *  - 3 departments, 4 designations
  *  - 8 employees:    emp1@company.com .. emp8@company.com / Employee@123
  */
@@ -16,6 +17,7 @@ const Attendance = require('../models/Attendance');
 const AttendanceRequest = require('../models/AttendanceRequest');
 const DocumentModel = require('../models/Document');
 const OfficeSettings = require('../models/OfficeSettings');
+const QrConfig = require('../models/QrConfig');
 
 const DEPARTMENTS = [
   { name: 'Engineering', description: 'Product development and technology' },
@@ -54,6 +56,7 @@ async function seed() {
     AttendanceRequest.deleteMany({}),
     DocumentModel.deleteMany({}),
     OfficeSettings.deleteMany({}),
+    QrConfig.deleteMany({}),
   ]);
 
   const settings = await OfficeSettings.create({
@@ -64,10 +67,12 @@ async function seed() {
     workEndTime: '18:00',
     lateToleranceMinutes: 10,
     earlyLeaveToleranceMinutes: 10,
-    qrRefreshSeconds: 30,
     timezone: 'Asia/Dubai',
   });
   console.log(`Office settings created (${settings.timezone}, radius ${settings.radiusMeters}m)`);
+
+  const qrConfig = await QrConfig.create(QrConfig.mint(1));
+  console.log(`Permanent QR code created (version ${qrConfig.version})`);
 
   const departments = await Department.create(DEPARTMENTS);
   console.log(`Departments: ${departments.map((d) => d.name).join(', ')}`);

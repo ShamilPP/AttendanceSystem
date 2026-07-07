@@ -1,13 +1,5 @@
 const mongoose = require('mongoose');
 
-const breakSchema = new mongoose.Schema(
-  {
-    start: { type: Date, required: true },
-    end: { type: Date, default: null },
-  },
-  { _id: false }
-);
-
 const locationSchema = new mongoose.Schema(
   {
     latitude: { type: Number, required: true },
@@ -31,9 +23,7 @@ const attendanceSchema = new mongoose.Schema(
     date: { type: String, required: true }, // YYYY-MM-DD (office timezone calendar day)
     checkIn: { type: Date, default: null },
     checkOut: { type: Date, default: null },
-    breaks: { type: [breakSchema], default: [] },
     workMinutes: { type: Number, default: 0 },
-    breakMinutes: { type: Number, default: 0 },
     status: {
       type: String,
       enum: ['PRESENT', 'LATE', 'ABSENT', 'ON_LEAVE', 'HALF_DAY'],

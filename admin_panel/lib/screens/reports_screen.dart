@@ -5,10 +5,14 @@ import '../providers/catalog_provider.dart';
 import '../providers/reports_provider.dart';
 import '../services/api_client.dart';
 import '../services/file_download.dart';
+import '../theme/app_spacing.dart';
 import '../utils/formats.dart';
 import '../utils/json_utils.dart';
+import '../widgets/app_button.dart';
+import '../widgets/app_card.dart';
 import '../widgets/app_feedback.dart';
 import '../widgets/picker_fields.dart';
+import '../widgets/states.dart';
 import '../widgets/table_wrapper.dart';
 
 /// Report builder: 6 report types, per-type date controls, results table,
@@ -58,142 +62,145 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final theme = Theme.of(context);
 
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final type in ReportType.values)
-                ChoiceChip(
-                  label: Text(type.label),
-                  selected: provider.type == type,
-                  onSelected: (selected) {
-                    if (selected) provider.setType(type);
-                  },
+          AppCard(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  children: [
+                    for (final type in ReportType.values)
+                      ChoiceChip(
+                        label: Text(type.label),
+                        selected: provider.type == type,
+                        onSelected: (selected) {
+                          if (selected) provider.setType(type);
+                        },
+                      ),
+                  ],
                 ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              // Per-type date controls.
-              if (provider.type == ReportType.daily)
-                SizedBox(
-                  width: 190,
-                  child: DatePickerField(
-                    label: 'Date',
-                    value: provider.date,
-                    lastDate: DateTime.now(),
-                    onChanged: (d) {
-                      if (d != null) provider.setParams(date: d);
-                    },
-                  ),
-                ),
-              if (provider.type == ReportType.weekly ||
-                  provider.type == ReportType.lateArrivals ||
-                  provider.type == ReportType.earlyCheckouts) ...[
-                SizedBox(
-                  width: 180,
-                  child: DatePickerField(
-                    label: 'From',
-                    value: provider.from,
-                    onChanged: (d) {
-                      if (d != null) provider.setParams(from: d);
-                    },
-                  ),
-                ),
-                SizedBox(
-                  width: 180,
-                  child: DatePickerField(
-                    label: 'To',
-                    value: provider.to,
-                    onChanged: (d) {
-                      if (d != null) provider.setParams(to: d);
-                    },
-                  ),
+                const Divider(height: AppSpacing.xxl),
+                Wrap(
+                  spacing: AppSpacing.md,
+                  runSpacing: AppSpacing.md,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    if (provider.type == ReportType.daily)
+                      SizedBox(
+                        width: 190,
+                        child: DatePickerField(
+                          label: 'Date',
+                          value: provider.date,
+                          lastDate: DateTime.now(),
+                          onChanged: (d) {
+                            if (d != null) provider.setParams(date: d);
+                          },
+                        ),
+                      ),
+                    if (provider.type == ReportType.weekly ||
+                        provider.type == ReportType.lateArrivals ||
+                        provider.type == ReportType.earlyCheckouts) ...[
+                      SizedBox(
+                        width: 180,
+                        child: DatePickerField(
+                          label: 'From',
+                          value: provider.from,
+                          onChanged: (d) {
+                            if (d != null) provider.setParams(from: d);
+                          },
+                        ),
+                      ),
+                      SizedBox(
+                        width: 180,
+                        child: DatePickerField(
+                          label: 'To',
+                          value: provider.to,
+                          onChanged: (d) {
+                            if (d != null) provider.setParams(to: d);
+                          },
+                        ),
+                      ),
+                    ],
+                    if (provider.type == ReportType.monthly ||
+                        provider.type == ReportType.workingHours)
+                      SizedBox(
+                        width: 230,
+                        child: MonthField(
+                          value: provider.month,
+                          onChanged: (m) => provider.setParams(month: m),
+                        ),
+                      ),
+                    if (_isAttendanceType(provider.type))
+                      SizedBox(
+                        width: 220,
+                        child: DropdownButtonFormField<String?>(
+                          key: ValueKey('report-dept-${provider.departmentId}'),
+                          initialValue: provider.departmentId,
+                          decoration:
+                              const InputDecoration(labelText: 'Department'),
+                          items: [
+                            const DropdownMenuItem<String?>(
+                                value: null, child: Text('All departments')),
+                            for (final d in catalog.departments)
+                              DropdownMenuItem<String?>(
+                                  value: d.id, child: Text(d.name)),
+                          ],
+                          onChanged: (v) => provider.setParams(
+                              departmentId: v, clearDepartment: v == null),
+                        ),
+                      ),
+                    AppButton(
+                      label: 'Run report',
+                      icon: Icons.play_arrow,
+                      loading: provider.loading,
+                      onPressed: () => provider.run(),
+                    ),
+                    AppButton.outline(
+                      label: 'Export Excel',
+                      icon: Icons.download,
+                      loading: provider.exporting,
+                      onPressed: _export,
+                    ),
+                  ],
                 ),
               ],
-              if (provider.type == ReportType.monthly ||
-                  provider.type == ReportType.workingHours)
-                SizedBox(
-                  width: 230,
-                  child: MonthField(
-                    value: provider.month,
-                    onChanged: (m) => provider.setParams(month: m),
-                  ),
-                ),
-              if (_isAttendanceType(provider.type))
-                SizedBox(
-                  width: 220,
-                  child: DropdownButtonFormField<String?>(
-                    key: ValueKey('report-dept-${provider.departmentId}'),
-                    initialValue: provider.departmentId,
-                    decoration: const InputDecoration(
-                      labelText: 'Department',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    items: [
-                      const DropdownMenuItem<String?>(
-                          value: null, child: Text('All departments')),
-                      for (final d in catalog.departments)
-                        DropdownMenuItem<String?>(
-                            value: d.id, child: Text(d.name)),
-                    ],
-                    onChanged: (v) => provider.setParams(
-                        departmentId: v, clearDepartment: v == null),
-                  ),
-                ),
-              FilledButton.icon(
-                icon: provider.loading
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.play_arrow, size: 18),
-                label: const Text('Run report'),
-                onPressed: provider.loading ? null : () => provider.run(),
-              ),
-              OutlinedButton.icon(
-                icon: provider.exporting
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.download, size: 18),
-                label: const Text('Export Excel'),
-                onPressed: provider.exporting ? null : _export,
-              ),
-            ],
+            ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: AppSpacing.lg),
           if (provider.error != null)
-            ErrorBanner(
-                message: provider.error!, onRetry: () => provider.run()),
+            ErrorBanner(message: provider.error!, onRetry: () => provider.run()),
           Expanded(
             child: provider.loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const LoadingState(message: 'Running report…')
                 : !provider.hasRun
                     ? const EmptyState(
+                        title: 'Build a report',
                         message:
                             'Pick a report type and date range, then press "Run report".',
                         icon: Icons.insert_chart_outlined)
                     : provider.rows.isEmpty
                         ? const EmptyState(
-                            message: 'The report returned no rows.',
+                            title: 'No rows',
+                            message: 'The report returned no data.',
                             icon: Icons.search_off)
-                        : _ReportTable(
-                            type: provider.type, rows: provider.rows),
+                        : AppCard(
+                            padding: EdgeInsets.zero,
+                            child: ClipRRect(
+                              borderRadius: AppRadius.cardR,
+                              child: _ReportTable(
+                                  type: provider.type, rows: provider.rows),
+                            ),
+                          ),
           ),
           if (provider.hasRun && provider.rows.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.only(top: AppSpacing.sm),
               child: Text(
                 '${provider.rows.length} row${provider.rows.length == 1 ? '' : 's'} · durations shown as h:mm',
                 style: theme.textTheme.bodySmall
@@ -264,8 +271,6 @@ class _ReportTable extends StatelessWidget {
           _ReportColumn('Check-out', (r) => _time(r, 'checkOut')),
           _ReportColumn('Work (h:mm)', (r) => _duration(r, 'workMinutes'),
               numeric: true),
-          _ReportColumn('Break (h:mm)', (r) => _duration(r, 'breakMinutes'),
-              numeric: true),
         ];
       case ReportType.weekly:
       case ReportType.monthly:
@@ -278,13 +283,9 @@ class _ReportTable extends StatelessWidget {
           _ReportColumn('Late', (r) => _count(r, 'lateDays'), numeric: true),
           _ReportColumn('Absent', (r) => _count(r, 'absentDays'),
               numeric: true),
-          _ReportColumn('Leave', (r) => _count(r, 'leaveDays'),
-              numeric: true),
+          _ReportColumn('Leave', (r) => _count(r, 'leaveDays'), numeric: true),
           _ReportColumn(
               'Work (h:mm)', (r) => _duration(r, 'totalWorkMinutes'),
-              numeric: true),
-          _ReportColumn(
-              'Break (h:mm)', (r) => _duration(r, 'totalBreakMinutes'),
               numeric: true),
         ];
       case ReportType.workingHours:
@@ -296,9 +297,6 @@ class _ReportTable extends StatelessWidget {
               numeric: true),
           _ReportColumn(
               'Total work (h:mm)', (r) => _duration(r, 'totalWorkMinutes'),
-              numeric: true),
-          _ReportColumn(
-              'Total break (h:mm)', (r) => _duration(r, 'totalBreakMinutes'),
               numeric: true),
           _ReportColumn(
               'Avg/day (h:mm)', (r) => _duration(r, 'averageWorkMinutes'),
@@ -330,12 +328,9 @@ class _ReportTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final columns = _columns;
     return TableWrapper(
       child: DataTable(
-        headingTextStyle:
-            theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700),
         columns: [
           for (final c in columns)
             DataColumn(label: Text(c.label), numeric: c.numeric),

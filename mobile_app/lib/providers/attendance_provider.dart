@@ -40,8 +40,20 @@ class AttendanceProvider extends ChangeNotifier {
   bool get canCheckIn => _todayLoaded && (_today?.checkIn == null);
   bool get canCheckOut =>
       _todayLoaded && _today?.checkIn != null && _today?.checkOut == null;
-  bool get canStartBreak => canCheckOut && !(_today?.hasOpenBreak ?? false);
-  bool get canEndBreak => canCheckOut && (_today?.hasOpenBreak ?? false);
+
+  /// The context-aware action for the single Home button:
+  /// CHECK_IN when there's no open record, CHECK_OUT when checked in,
+  /// null once the day is complete (checked out).
+  AttendanceAction? get nextAction {
+    if (!_todayLoaded) return null;
+    if (canCheckIn) return AttendanceAction.checkIn;
+    if (canCheckOut) return AttendanceAction.checkOut;
+    return null;
+  }
+
+  /// True when today's record is complete (checked in and out).
+  bool get isDoneForToday =>
+      _todayLoaded && _today?.checkIn != null && _today?.checkOut != null;
 
   Future<void> loadToday() async {
     _todayLoading = true;

@@ -68,9 +68,7 @@ Error (4xx/5xx):
   "date": "2026-07-07",
   "checkIn": "2026-07-07T04:05:00.000Z",
   "checkOut": "2026-07-07T13:02:00.000Z",
-  "breaks": [ { "start": "2026-07-07T08:00:00.000Z", "end": "2026-07-07T08:30:00.000Z" } ],
-  "workMinutes": 508,
-  "breakMinutes": 30,
+  "workMinutes": 537,
   "status": "PRESENT",
   "isLate": false,
   "isEarlyOut": false,
@@ -80,8 +78,9 @@ Error (4xx/5xx):
 }
 ```
 
+- Attendance is **check-in / check-out only** — there is no break tracking anywhere in the system.
 - `status`: `PRESENT | LATE | ABSENT | ON_LEAVE | HALF_DAY`. A late check-in stores `status: "LATE"` and `isLate: true` (LATE counts as present for headcounts).
-- `checkOut`, `breaks[i].end` may be `null` while open. `workMinutes`/`breakMinutes` are recomputed by the server on every change; `workMinutes` excludes break time.
+- `checkOut` may be `null` while the day is open. `workMinutes` = full span from `checkIn` to `checkOut` (0 while open), recomputed by the server on every change.
 - `correction` present only if an admin edited the record.
 
 ### Office settings (singleton)
@@ -95,7 +94,6 @@ Error (4xx/5xx):
   "workEndTime": "18:00",
   "lateToleranceMinutes": 10,
   "earlyLeaveToleranceMinutes": 10,
-  "qrRefreshSeconds": 30,
   "timezone": "Asia/Dubai"
 }
 ```
@@ -178,28 +176,31 @@ GET `/` (list, any role) · POST `/` `{ name, description? }` · PUT `/:id` · D
 
 ### QR **[admin]**
 
+The QR code is **permanent (static)**: it does NOT rotate on a timer. It stays valid indefinitely until an admin explicitly regenerates it. Regenerating mints a brand-new code and **immediately invalidates the previous one** — any old printed/cached QR stops working the instant a new one is generated.
+
 | Method | Path | Response |
 |---|---|---|
-| GET | `/qr/current` | `data: { qrData: "<opaque base64 string>", expiresAt: "<ISO>", refreshSeconds: 30 }` |
+| GET | `/qr/current` | `data: { qrData: "<opaque string>", version: 3, generatedAt: "<ISO>" }` |
+| POST | `/qr/regenerate` | mints a new code, invalidates the old one → `data: { qrData, version, generatedAt }` (version increments) |
 
-`qrData` is AES-256-GCM–encrypted JSON `{ t: <issuedAt ms>, n: <nonce> }`, key from env `QR_SECRET` (encoded `base64(iv):base64(ciphertext):base64(authTag)`). The admin panel renders it as a QR image and re-fetches every `refreshSeconds`. A scanned code is valid for `qrRefreshSeconds + 15s` grace.
+`qrData` is AES-256-GCM–encrypted JSON `{ token: "<random>", v: <version> }`, key from env `QR_SECRET` (encoded `base64(iv):base64(ciphertext):base64(authTag)`). The server stores the current `{ token, version, qrData, generatedAt }` as a singleton and **serves the exact same stored `qrData` string on every `GET /qr/current`** (so the rendered image is stable and never changes until regenerated). The admin panel renders it once as a QR image (no auto-refresh, no countdown) and exposes a **Regenerate** button. On scan, the server decrypts the submitted `qrData` and accepts it only if its `token` equals the currently stored token — an old code's token no longer matches after a regenerate, so it is rejected. If no QR exists yet (fresh DB), `GET /qr/current` lazily generates the first one; the seed also creates an initial code.
 
 ### Attendance — employee
 
 | Method | Path | Body / Query |
 |---|---|---|
-| POST | `/attendance/scan` | `{ qrData, action, latitude, longitude }`, `action ∈ CHECK_IN | CHECK_OUT | BREAK_START | BREAK_END` → `data: { attendance: Attendance, message }` |
+| POST | `/attendance/scan` | `{ qrData, action, latitude, longitude }`, `action ∈ CHECK_IN | CHECK_OUT` → `data: { attendance: Attendance, message }` |
 | GET | `/attendance/today` | → `data: Attendance \| null` |
 | GET | `/attendance/history` | `?from=&to=&page=&limit=` → paginated `data: [Attendance]`, newest first |
 | GET | `/attendance/summary` | `?month=YYYY-MM` → see below |
 | POST | `/attendance/requests` | `{ date, type, requestedCheckIn?, requestedCheckOut?, reason }` |
 | GET | `/attendance/requests/me` | `?status=&page=` |
 
-**Scan validation order (server-side):** ① QR decrypts and is fresh → else 403 `"Invalid or expired QR code"`; ② geofence: haversine(location, office) ≤ `radiusMeters` → else 403 `"You are outside the allowed office area (Xm away, limit Ym)"`; ③ state machine: CHECK_IN once per day (409 if repeated); CHECK_OUT/BREAK_* require prior check-in; BREAK_START requires no open break; BREAK_END requires an open break; CHECK_OUT auto-closes an open break and rejects a second check-out (409). Late/early flags & minutes computed on the spot.
+**Scan validation order (server-side):** ① QR decrypts and its `token` matches the current stored token → else 403 `"Invalid or expired QR code"`; ② geofence: haversine(location, office) ≤ `radiusMeters` → else 403 `"You are outside the allowed office area (Xm away, limit Ym)"`; ③ state machine: CHECK_IN once per day (409 if repeated); CHECK_OUT requires a prior check-in (400 if none) and rejects a second check-out (409). Late/early flags & `workMinutes` computed on the spot.
 
 **Monthly summary response:**
 ```json
-{ "month": "2026-07", "workingDays": 23, "presentDays": 20, "lateDays": 3, "absentDays": 2, "leaveDays": 1, "halfDays": 0, "totalWorkMinutes": 9700, "totalBreakMinutes": 610, "averageWorkMinutes": 485, "earlyOutDays": 1, "records": [Attendance] }
+{ "month": "2026-07", "workingDays": 23, "presentDays": 20, "lateDays": 3, "absentDays": 2, "leaveDays": 1, "halfDays": 0, "totalWorkMinutes": 9700, "averageWorkMinutes": 485, "earlyOutDays": 1, "records": [Attendance] }
 ```
 `workingDays` = Mon–Fri in month up to today (future days excluded). `absentDays` = workingDays − days with any attendance/leave.
 
@@ -207,9 +208,9 @@ GET `/` (list, any role) · POST `/` `{ name, description? }` · PUT `/:id` · D
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/attendance/live` | `?departmentId=` → `data: { date, summary: { total, present, late, absent, onLeave, checkedOut, onBreak }, records: [ { employee, attendance: Attendance \| null, liveStatus } ] }` — one row per active employee; `liveStatus ∈ NOT_IN | WORKING | ON_BREAK | CHECKED_OUT | ON_LEAVE` |
+| GET | `/attendance/live` | `?departmentId=` → `data: { date, summary: { total, present, late, absent, onLeave, checkedOut }, records: [ { employee, attendance: Attendance \| null, liveStatus } ] }` — one row per active employee; `liveStatus ∈ NOT_IN | WORKING | CHECKED_OUT | ON_LEAVE` |
 | GET | `/attendance/logs` | `?employeeId=&from=&to=&status=&page=&limit=` → paginated `[Attendance]` |
-| PUT | `/attendance/:id/correct` | `{ checkIn?, checkOut?, breaks?, status?, note }` (note required) — recomputes minutes/flags, stores `correction` |
+| PUT | `/attendance/:id/correct` | `{ checkIn?, checkOut?, status?, note }` (note required) — recomputes `workMinutes`/flags, stores `correction` |
 | POST | `/attendance/manual` | `{ employeeId, date, checkIn?, checkOut?, status?, note }` — create a record that doesn't exist (e.g. mark ON_LEAVE) |
 | GET | `/attendance/requests` | `?status=&page=` — all employees' requests |
 | PUT | `/attendance/requests/:id` | `{ status: "APPROVED" \| "REJECTED", reviewNote? }` |
@@ -220,7 +221,7 @@ GET `/` (list, any role) · POST `/` `{ name, description? }` · PUT `/:id` · D
 
 | Method | Path | Response `data` |
 |---|---|---|
-| GET | `/dashboard/stats` | `?date=` (default today) → `{ totalEmployees, present, absent, late, onLeave, onBreak, checkedOut, averageWorkMinutes, attendanceRate }` (`attendanceRate` = present incl. late ÷ totalEmployees, 0–100) |
+| GET | `/dashboard/stats` | `?date=` (default today) → `{ totalEmployees, present, absent, late, onLeave, checkedOut, averageWorkMinutes, attendanceRate }` (`attendanceRate` = present incl. late ÷ totalEmployees, 0–100) |
 | GET | `/dashboard/trends` | `?period=daily\|weekly\|monthly` → `{ period, points: [ { label, present, late, absent } ] }` — daily: last 14 days (`label` = `YYYY-MM-DD`); weekly: last 8 ISO weeks (`2026-W27`); monthly: last 6 months (`2026-07`) |
 
 ### Reports **[admin]**
@@ -229,8 +230,8 @@ All accept `&format=json` (default) or `&format=xlsx` (file download, `Content-D
 
 | Method | Path | Query |
 |---|---|---|
-| GET | `/reports/attendance` | `type=daily&date=` or `type=weekly&from=&to=` or `type=monthly&month=YYYY-MM`, optional `departmentId` → per-employee rows: `{ employeeId, name, department, presentDays, lateDays, absentDays, leaveDays, totalWorkMinutes, totalBreakMinutes }` (daily returns the day's Attendance-like rows with times) |
-| GET | `/reports/working-hours` | `month=YYYY-MM` → `{ employeeId, name, department, totalWorkMinutes, totalBreakMinutes, averageWorkMinutes, daysWorked }` |
+| GET | `/reports/attendance` | `type=daily&date=` or `type=weekly&from=&to=` or `type=monthly&month=YYYY-MM`, optional `departmentId` → per-employee rows: `{ employeeId, name, department, presentDays, lateDays, absentDays, leaveDays, totalWorkMinutes }` (daily returns the day's Attendance-like rows with times) |
+| GET | `/reports/working-hours` | `month=YYYY-MM` → `{ employeeId, name, department, totalWorkMinutes, averageWorkMinutes, daysWorked }` |
 | GET | `/reports/late-arrivals` | `from=&to=` → `{ employeeId, name, department, date, checkIn, minutesLate }` |
 | GET | `/reports/early-checkouts` | `from=&to=` → `{ employeeId, name, department, date, checkOut, minutesEarly }` |
 
@@ -261,4 +262,13 @@ QR_SECRET=<32-byte base64>
 CORS_ORIGIN=*
 ```
 
-`npm run seed` creates: admin `admin@company.com` / `Admin@123`, office settings (defaults above), 3 departments, 4 designations, and 8 sample employees `emp1@company.com` … / `Employee@123`.
+`npm run seed` creates: admin `admin@company.com` / `Admin@123`, office settings (defaults above), an initial permanent QR code (version 1), 3 departments, 4 designations, and 8 sample employees `emp1@company.com` … / `Employee@123`.
+
+---
+
+## Revision note (2026-07-08 — v2)
+
+Three breaking changes from v1; all three apps updated together:
+1. **Breaks removed entirely.** No `BREAK_START`/`BREAK_END` actions, no `breaks`/`breakMinutes` fields, no `onBreak`/`ON_BREAK` anywhere. Attendance is check-in + check-out only; `workMinutes` is the full checkIn→checkOut span.
+2. **Single scan action set:** `CHECK_IN | CHECK_OUT`. Clients present ONE context-aware button (Check In when no open record, Check Out when checked in, done when checked out).
+3. **Permanent QR:** `GET /qr/current` returns a stable code; `POST /qr/regenerate` mints a new one and invalidates the old. Validation is token-match, not time-freshness. `qrRefreshSeconds` removed from office settings.

@@ -9,13 +9,12 @@ const {
   listDays,
   dayjs,
 } = require('../utils/time');
-const { PRESENT_STATUSES, hasOpenBreak } = require('../utils/attendanceCalc');
+const { PRESENT_STATUSES } = require('../utils/attendanceCalc');
 
 function summarizeDay(records) {
   let present = 0;
   let late = 0;
   let onLeave = 0;
-  let onBreak = 0;
   let checkedOut = 0;
   let workMinutesSum = 0;
   let workedCount = 0;
@@ -25,13 +24,12 @@ function summarizeDay(records) {
     if (r.isLate) late += 1;
     if (r.status === 'ON_LEAVE') onLeave += 1;
     if (r.checkOut) checkedOut += 1;
-    else if (hasOpenBreak(r)) onBreak += 1;
     if (r.checkIn) {
       workMinutesSum += r.workMinutes || 0;
       workedCount += 1;
     }
   }
-  return { present, late, onLeave, onBreak, checkedOut, workMinutesSum, workedCount };
+  return { present, late, onLeave, checkedOut, workMinutesSum, workedCount };
 }
 
 // GET /dashboard/stats?date=
@@ -59,7 +57,6 @@ const stats = asyncHandler(async (req, res) => {
     absent,
     late: day.late,
     onLeave: day.onLeave,
-    onBreak: day.onBreak,
     checkedOut: day.checkedOut,
     averageWorkMinutes,
     attendanceRate,

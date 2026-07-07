@@ -32,21 +32,14 @@ function decryptQrPayload(qrData) {
   }
 }
 
-/** Fresh QR token: { t: issuedAt ms, n: nonce }. */
-function issueQrToken() {
-  const issuedAt = Date.now();
-  const payload = { t: issuedAt, n: crypto.randomBytes(8).toString('hex') };
-  return { qrData: encryptQrPayload(payload), issuedAt };
+/** Strong random opaque token embedded in the permanent QR code. */
+function generateToken() {
+  return crypto.randomBytes(24).toString('base64url');
 }
 
-/**
- * A scanned code is valid for qrRefreshSeconds + 15s grace.
- * Small negative age tolerated for clock skew.
- */
-function isQrPayloadFresh(payload, refreshSeconds) {
-  if (!payload || typeof payload.t !== 'number' || typeof payload.n !== 'string') return false;
-  const age = Date.now() - payload.t;
-  return age >= -10000 && age <= (refreshSeconds + 15) * 1000;
+/** Build the stored qrData string for a { token, version } pair. */
+function buildQrData(token, version) {
+  return encryptQrPayload({ token, v: version });
 }
 
-module.exports = { encryptQrPayload, decryptQrPayload, issueQrToken, isQrPayloadFresh };
+module.exports = { encryptQrPayload, decryptQrPayload, generateToken, buildQrData };

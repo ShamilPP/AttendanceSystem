@@ -3,10 +3,13 @@ import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
 import '../services/api_client.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
 import 'home_shell.dart';
 import 'login_screen.dart';
 
-/// Checks for a stored token and routes to Home or Login.
+/// Brand splash / auth gate: checks for a stored token and routes to Home or
+/// Login. Shows a retry affordance if the session check hits a network error.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -31,7 +34,7 @@ class _SplashScreenState extends State<SplashScreen> {
     });
     final auth = context.read<AuthProvider>();
     // Let the splash frame render before hitting the network.
-    await Future<void>.delayed(const Duration(milliseconds: 400));
+    await Future<void>.delayed(const Duration(milliseconds: 500));
     bool restored;
     try {
       restored = await auth.tryRestoreSession();
@@ -53,70 +56,84 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 88,
-              height: 88,
-              decoration: BoxDecoration(
-                color: scheme.primaryContainer,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Icon(Icons.fingerprint_rounded,
-                  size: 52, color: scheme.onPrimaryContainer),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Attendance',
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            Text(
-              'Employee attendance made simple',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: 32),
-            if (_busy)
-              const SizedBox(
-                width: 28,
-                height: 28,
-                child: CircularProgressIndicator(strokeWidth: 3),
-              )
-            else if (_error != null) ...[
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 40),
-                child: Text(
-                  _error!,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: scheme.error),
+      body: Container(
+        decoration: const BoxDecoration(gradient: AppColors.brandGradient),
+        child: SafeArea(
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 104,
+                  height: 104,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.25)),
+                  ),
+                  child: const Icon(Icons.fingerprint_rounded,
+                      size: 60, color: Colors.white),
                 ),
-              ),
-              const SizedBox(height: 12),
-              FilledButton.tonalIcon(
-                onPressed: _bootstrap,
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('Retry'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute<void>(
-                        builder: (_) => const LoginScreen()),
-                  );
-                },
-                child: const Text('Go to login'),
-              ),
-            ],
-          ],
+                const SizedBox(height: AppSpacing.xxl),
+                Text(
+                  'NexCrew Attendance',
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineSmall
+                      ?.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  'Employee attendance made simple',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.85),
+                      ),
+                ),
+                const SizedBox(height: AppSpacing.xxxl),
+                if (_busy)
+                  const SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 3, color: Colors.white),
+                  )
+                else if (_error != null) ...[
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: AppSpacing.xxxl),
+                    child: Text(
+                      _error!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.95)),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  FilledButton.icon(
+                    onPressed: _bootstrap,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: AppColors.seed,
+                    ),
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Retry'),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute<void>(
+                            builder: (_) => const LoginScreen()),
+                      );
+                    },
+                    child: const Text('Go to login',
+                        style: TextStyle(color: Colors.white)),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );

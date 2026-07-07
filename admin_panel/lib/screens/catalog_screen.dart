@@ -4,7 +4,11 @@ import 'package:provider/provider.dart';
 import '../models/catalog_item.dart';
 import '../providers/catalog_provider.dart';
 import '../services/api_client.dart';
+import '../theme/app_spacing.dart';
+import '../widgets/app_button.dart';
+import '../widgets/app_card.dart';
 import '../widgets/app_feedback.dart';
+import '../widgets/states.dart';
 
 /// Two CRUD lists: departments and designations.
 class CatalogScreen extends StatefulWidget {
@@ -28,7 +32,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
     final provider = context.watch<CatalogProvider>();
 
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -39,7 +43,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
             child: provider.loading &&
                     provider.departments.isEmpty &&
                     provider.designations.isEmpty
-                ? const Center(child: CircularProgressIndicator())
+                ? const LoadingState()
                 : LayoutBuilder(builder: (context, constraints) {
                     final wide = constraints.maxWidth >= 900;
                     final departmentsPanel = _CatalogPanel(
@@ -61,16 +65,16 @@ class _CatalogScreenState extends State<CatalogScreen> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Expanded(child: departmentsPanel),
-                          const SizedBox(width: 16),
+                          const SizedBox(width: AppSpacing.lg),
                           Expanded(child: designationsPanel),
                         ],
                       );
                     }
                     return ListView(
                       children: [
-                        SizedBox(height: 420, child: departmentsPanel),
-                        const SizedBox(height: 16),
-                        SizedBox(height: 420, child: designationsPanel),
+                        SizedBox(height: 440, child: departmentsPanel),
+                        const SizedBox(height: AppSpacing.lg),
+                        SizedBox(height: 440, child: designationsPanel),
                       ],
                     );
                   }),
@@ -118,6 +122,7 @@ class _CatalogPanel extends StatelessWidget {
     final ok = await confirmDialog(
       context,
       title: 'Delete $singular',
+      icon: Icons.delete_outline,
       message: 'Delete "${item.name}"? This cannot be undone. '
           'Deletion is blocked while any employee still uses this $singular.',
       confirmLabel: 'Delete',
@@ -144,84 +149,81 @@ class _CatalogPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: theme.colorScheme.outlineVariant),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, size: 20, color: theme.colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(title,
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700)),
-                const SizedBox(width: 8),
-                Text('${items.length}',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-                const Spacer(),
-                FilledButton.tonalIcon(
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Add'),
-                  onPressed: () => _openEditor(context),
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 20, color: theme.colorScheme.primary),
+              const SizedBox(width: AppSpacing.sm),
+              Text(title,
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700)),
+              const SizedBox(width: AppSpacing.sm),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(999),
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: items.isEmpty
-                  ? EmptyState(
-                      message: 'No $title yet. Add the first one.',
-                      icon: icon)
-                  : ListView.separated(
-                      itemCount: items.length,
-                      separatorBuilder: (context, index) =>
-                          const Divider(height: 1),
-                      itemBuilder: (context, i) {
-                        final item = items[i];
-                        return ListTile(
-                          dense: true,
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 4),
-                          title: Text(item.name,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w600)),
-                          subtitle: item.description == null
-                              ? null
-                              : Text(item.description!,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                tooltip: 'Rename',
-                                icon:
-                                    const Icon(Icons.edit_outlined, size: 18),
-                                onPressed: () => _openEditor(context, item),
-                              ),
-                              IconButton(
-                                tooltip: 'Delete',
-                                icon: Icon(Icons.delete_outline,
-                                    size: 18,
-                                    color: theme.colorScheme.error),
-                                onPressed: () => _delete(context, item),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
+                child: Text('${items.length}',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant)),
+              ),
+              const Spacer(),
+              AppButton.tonal(
+                label: 'Add',
+                icon: Icons.add,
+                onPressed: () => _openEditor(context),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Expanded(
+            child: items.isEmpty
+                ? EmptyState(
+                    message: 'No $title yet. Add the first one.', icon: icon)
+                : ListView.separated(
+                    itemCount: items.length,
+                    separatorBuilder: (context, index) =>
+                        const Divider(height: 1),
+                    itemBuilder: (context, i) {
+                      final item = items[i];
+                      return ListTile(
+                        dense: true,
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 4),
+                        title: Text(item.name,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w600)),
+                        subtitle: item.description == null
+                            ? null
+                            : Text(item.description!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: 'Rename',
+                              icon: const Icon(Icons.edit_outlined, size: 18),
+                              onPressed: () => _openEditor(context, item),
+                            ),
+                            IconButton(
+                              tooltip: 'Delete',
+                              icon: Icon(Icons.delete_outline,
+                                  size: 18, color: theme.colorScheme.error),
+                              onPressed: () => _delete(context, item),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }
@@ -253,8 +255,7 @@ class _CatalogItemDialogState extends State<_CatalogItemDialog> {
   @override
   void initState() {
     super.initState();
-    _nameController =
-        TextEditingController(text: widget.existing?.name ?? '');
+    _nameController = TextEditingController(text: widget.existing?.name ?? '');
     _descriptionController =
         TextEditingController(text: widget.existing?.description ?? '');
   }
@@ -297,9 +298,8 @@ class _CatalogItemDialogState extends State<_CatalogItemDialog> {
   Widget build(BuildContext context) {
     final isEdit = widget.existing != null;
     return AlertDialog(
-      title: Text(isEdit
-          ? 'Rename ${widget.singular}'
-          : 'Add ${widget.singular}'),
+      title:
+          Text(isEdit ? 'Rename ${widget.singular}' : 'Add ${widget.singular}'),
       content: SizedBox(
         width: 380,
         child: Column(
@@ -309,25 +309,18 @@ class _CatalogItemDialogState extends State<_CatalogItemDialog> {
             TextField(
               controller: _nameController,
               autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Name',
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
+              decoration: const InputDecoration(labelText: 'Name'),
               onSubmitted: (_) => _save(),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: AppSpacing.md),
             TextField(
               controller: _descriptionController,
-              decoration: const InputDecoration(
-                labelText: 'Description (optional)',
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
+              decoration:
+                  const InputDecoration(labelText: 'Description (optional)'),
               onSubmitted: (_) => _save(),
             ),
             if (_error != null) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.md),
               Text(_error!,
                   style:
                       TextStyle(color: Theme.of(context).colorScheme.error)),
@@ -340,14 +333,10 @@ class _CatalogItemDialogState extends State<_CatalogItemDialog> {
           onPressed: _saving ? null : () => Navigator.of(context).pop(false),
           child: const Text('Cancel'),
         ),
-        FilledButton(
-          onPressed: _saving ? null : _save,
-          child: _saving
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2))
-              : Text(isEdit ? 'Save' : 'Add'),
+        AppButton(
+          label: isEdit ? 'Save' : 'Add',
+          loading: _saving,
+          onPressed: _save,
         ),
       ],
     );

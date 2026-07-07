@@ -16,7 +16,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Attendance Admin'), findsOneWidget);
+    expect(find.text('Welcome back'), findsOneWidget);
     expect(find.widgetWithText(TextFormField, 'Email'), findsOneWidget);
     expect(find.widgetWithText(TextFormField, 'Password'), findsOneWidget);
 

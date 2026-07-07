@@ -39,11 +39,7 @@ const String attendanceFixture = '''
   "date": "2026-07-07",
   "checkIn": "2026-07-07T04:05:00.000Z",
   "checkOut": "2026-07-07T13:02:00.000Z",
-  "breaks": [
-    { "start": "2026-07-07T08:00:00.000Z", "end": "2026-07-07T08:30:00.000Z" }
-  ],
-  "workMinutes": 508,
-  "breakMinutes": 30,
+  "workMinutes": 537,
   "status": "PRESENT",
   "isLate": false,
   "isEarlyOut": false,
@@ -64,9 +60,7 @@ const String openAttendanceFixture = '''
   "date": "2026-07-07",
   "checkIn": "2026-07-07T04:05:00.000Z",
   "checkOut": null,
-  "breaks": [ { "start": "2026-07-07T08:00:00.000Z", "end": null } ],
   "workMinutes": 0,
-  "breakMinutes": 0,
   "status": "LATE",
   "isLate": true,
   "isEarlyOut": false,
@@ -85,7 +79,6 @@ const String summaryFixture = '''
   "leaveDays": 1,
   "halfDays": 0,
   "totalWorkMinutes": 9700,
-  "totalBreakMinutes": 610,
   "averageWorkMinutes": 485,
   "earlyOutDays": 1,
   "records": [$attendanceFixture]
@@ -179,11 +172,7 @@ void main() {
       expect(a.date, '2026-07-07');
       expect(a.checkIn, DateTime.utc(2026, 7, 7, 4, 5));
       expect(a.checkOut, DateTime.utc(2026, 7, 7, 13, 2));
-      expect(a.breaks, hasLength(1));
-      expect(a.breaks.first.start, DateTime.utc(2026, 7, 7, 8));
-      expect(a.breaks.first.end, DateTime.utc(2026, 7, 7, 8, 30));
-      expect(a.workMinutes, 508);
-      expect(a.breakMinutes, 30);
+      expect(a.workMinutes, 537);
       expect(a.status, AttendanceStatus.present);
       expect(a.isLate, isFalse);
       expect(a.isEarlyOut, isFalse);
@@ -191,7 +180,7 @@ void main() {
       expect(a.checkInLocation?.longitude, 55.2744);
       expect(a.correction?.correctedBy, '665f1c2ab8d3f60012aa0999');
       expect(a.correction?.note, 'Fixed missing check-out');
-      expect(a.hasOpenBreak, isFalse);
+      expect(a.isWorking, isFalse);
     });
 
     test('round-trips through toJson', () {
@@ -203,46 +192,42 @@ void main() {
       expect(reparsed.toJson()['date'], '2026-07-07');
     });
 
-    test('handles open records (null checkOut, open break)', () {
+    test('handles open records (null checkOut) and is still working', () {
       final a = Attendance.fromJson(decode(openAttendanceFixture));
       expect(a.checkOut, isNull);
       expect(a.status, AttendanceStatus.late);
       expect(a.isLate, isTrue);
-      expect(a.hasOpenBreak, isTrue);
-      expect(a.openBreak, isNotNull);
+      expect(a.isWorking, isTrue);
       expect(a.checkOutLocation, isNull);
       // Bare-string employee id is tolerated.
       expect(a.employee?.id, '665f1c2ab8d3f60012aa0001');
 
-      // Live durations: at 09:00 UTC, worked = (09:00-04:05) - 1h open break.
+      // Live duration is the full span: at 09:00 UTC, worked = 09:00-04:05.
       final now = DateTime.utc(2026, 7, 7, 9);
-      expect(a.liveBreakDuration(now), const Duration(hours: 1));
-      expect(a.liveWorkDuration(now),
-          const Duration(hours: 3, minutes: 55));
+      expect(a.liveWorkDuration(now), const Duration(hours: 4, minutes: 55));
     });
 
     test('closed records report server-computed work minutes', () {
       final a = Attendance.fromJson(decode(attendanceFixture));
       final now = DateTime.utc(2026, 7, 8);
-      expect(a.liveWorkDuration(now), const Duration(minutes: 508));
-      expect(a.liveBreakDuration(now), const Duration(minutes: 30));
+      expect(a.liveWorkDuration(now), const Duration(minutes: 537));
+      expect(a.isWorking, isFalse);
     });
 
     test('is tolerant of an entirely empty object', () {
       final a = Attendance.fromJson(const {});
       expect(a.id, '');
       expect(a.checkIn, isNull);
-      expect(a.breaks, isEmpty);
       expect(a.workMinutes, 0);
       expect(a.status, AttendanceStatus.present);
+      expect(a.isWorking, isFalse);
       expect(a.liveWorkDuration(DateTime.now()), Duration.zero);
     });
 
-    test('scan actions map to the contract enum values', () {
+    test('scan actions map to the v2 contract enum values (no breaks)', () {
+      expect(AttendanceAction.values, hasLength(2));
       expect(AttendanceAction.checkIn.apiValue, 'CHECK_IN');
       expect(AttendanceAction.checkOut.apiValue, 'CHECK_OUT');
-      expect(AttendanceAction.breakStart.apiValue, 'BREAK_START');
-      expect(AttendanceAction.breakEnd.apiValue, 'BREAK_END');
     });
   });
 
@@ -257,11 +242,10 @@ void main() {
       expect(s.leaveDays, 1);
       expect(s.halfDays, 0);
       expect(s.totalWorkMinutes, 9700);
-      expect(s.totalBreakMinutes, 610);
       expect(s.averageWorkMinutes, 485);
       expect(s.earlyOutDays, 1);
       expect(s.records, hasLength(1));
-      expect(s.records.first.workMinutes, 508);
+      expect(s.records.first.workMinutes, 537);
     });
 
     test('round-trips through toJson', () {
