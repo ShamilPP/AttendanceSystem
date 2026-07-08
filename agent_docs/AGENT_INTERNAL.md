@@ -72,6 +72,16 @@ Built in one session on 2026-07-07 via a multi-agent workflow (`wf_ba04ad97-10a`
 3. Production hardening backlog (all currently dev-mode by design): disable cleartext HTTP/ATS exceptions, restrict `CORS_ORIGIN`, rotate committed `.env` secrets, HTTPS, consider `Access-Control-Expose-Headers: Content-Disposition` on backend so browsers see xlsx filenames (admin panel has fallback names — works fine without).
 4. Possible product extensions user may ask for: leave management module (currently ON_LEAVE via manual entry/requests only), push notifications, reactivating soft-deleted employees from admin UI (isActive is not a contract write field — would need a contract change first).
 
+## 2c. Deployment — Hostinger VPS (IN PROGRESS, 2026-07-08)
+
+Deploying to a Hostinger VPS. Facts:
+- Host `srv1497924`, user `shamildevv`, Ubuntu (Node v20.19.4). Repo cloned to `~/AttendanceSystem` (from GitHub `ShamilPP/AttendanceSystem`).
+- **Database: MongoDB Atlas** (NOT local mongod). Cluster `testcluster.cz73g95.mongodb.net`, db `AttendanceSystem`, user `shamilpp4115`. Connection string lives in `backend/.env` only. **TODO/security:** rotate the Atlas password (it leaked into a chat paste) and restrict Atlas Network Access to the VPS IP.
+- **Backend runs under PM2**, process name `attendance-api-5100`, **PORT=5100** (5000/5001 were already taken by other `nexbilling` apps). `pm2 save` done; `pm2 startup` (boot persistence) command was issued. Verified: `GET /health` ok + admin login returns token on `localhost:5100`.
+- Ports already in use on the box: 5000, 5001 (nexbilling node), 4000, 3000/3001/3002 (next-server), 3006. **nginx** already serving 80/443 for other sites. So our API sits on 5100 behind nginx.
+- **Planned architecture (single subdomain):** one subdomain (e.g. `attendance.<domain>`); nginx routes `/api/` → `localhost:5100`, everything else → admin panel static build (`flutter build web`). Same-origin avoids mixed-content/CORS. Admin panel built with baseUrl = full `https://<subdomain>/api/v1`. Mobile APK uses the same URL.
+- **PENDING:** (Part 2) nginx server block + certbot SSL for the subdomain; (Part 3) build admin panel web locally (this Mac has Flutter) with the prod API URL → upload `build/web` to VPS; (Part 4) employee app — APK vs web build (undecided). Waiting on user for the subdomain name + DNS.
+
 ## 3. Critical data (credentials, config, defaults)
 
 Seeded by `cd backend && npm run seed` (idempotent, wipe-and-recreate DB `attendance_system`):
