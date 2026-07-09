@@ -1,42 +1,42 @@
 #!/usr/bin/env bash
 #
-# Build a Flutter web app for production and publish it outside the project.
+# Build the Flutter web app(s) into  <repo>/build/{admin,staff}.
 #
-#   Usage:  ./deploy-web.sh [admin|staff]     (defaults to admin)
+#   Usage:  ./deploy-web.sh [admin|staff|both]     (default: both)
 #
-# What it does:
-#   1. flutter build web  with the production same-origin API base (/api/v1),
-#      so the app calls the backend through nginx on its own origin (no CORS).
-#   2. rsync the build OUT of the flutter project into /var/www/... (what nginx
-#      serves), mirroring exactly (old files pruned).
-#   3. pm2 restart the backend.
-#
-# Prerequisite: Flutter must be installed on the machine that runs this.
+# Notes:
+#   - Builds with the production same-origin API base (/api/v1); nginx proxies
+#     /api/ -> the backend, so each app calls the API on its own origin (no CORS).
+#   - Output goes to a top-level build/ folder (outside each flutter project):
+#       build/admin  <- admin panel
+#       build/staff  <- employee app
+#   - Does NOT touch pm2 (restart the backend yourself if you need to).
 #
 set -euo pipefail
 
-TARGET="${1:-admin}"
-API_BASE="/api/v1"          # same-origin; nginx proxies /api/ -> localhost:5100
-PM2_APP="attendance-api-5100"
+API_BASE="/api/v1"
+REPO="$(cd "$(dirname "$0")" && pwd)"
 
-case "$TARGET" in
-  admin) APP_DIR="admin_panel"; SERVE_DIR="/var/www/attendance-admin" ;;
-  staff) APP_DIR="mobile_app";  SERVE_DIR="/var/www/attendance-staff" ;;
-  *) echo "Usage: $0 [admin|staff]"; exit 1 ;;
+build_one() {
+  local target="$1" app_dir out_dir
+  case "$target" in
+    admin) app_dir="admin_panel"; out_dir="$REPO/build/admin" ;;
+    staff) app_dir="mobile_app";  out_dir="$REPO/build/staff" ;;
+    *) echo "unknown target: $target"; return 1 ;;
+  esac
+  echo "==> [$target] flutter build web  (API_BASE_URL=$API_BASE)"
+  ( cd "$REPO/$app_dir" && flutter build web --release --dart-define=API_BASE_URL="$API_BASE" )
+  echo "==> [$target] publish -> $out_dir"
+  rm -rf "$out_dir"; mkdir -p "$out_dir"
+  cp -R "$REPO/$app_dir/build/web/." "$out_dir/"
+  echo "==> [$target] done -> $out_dir"
+}
+
+case "${1:-both}" in
+  admin) build_one admin ;;
+  staff) build_one staff ;;
+  both)  build_one admin; build_one staff ;;
+  *) echo "Usage: $0 [admin|staff|both]"; exit 1 ;;
 esac
 
-REPO="$(cd "$(dirname "$0")" && pwd)"
-cd "$REPO/$APP_DIR"
-
-echo "==> [$TARGET] flutter build web  (API_BASE_URL=$API_BASE)"
-flutter build web --release --dart-define=API_BASE_URL="$API_BASE"
-
-echo "==> [$TARGET] publishing build/web -> $SERVE_DIR"
-sudo mkdir -p "$SERVE_DIR"
-sudo rsync -a --delete "build/web/" "$SERVE_DIR/"
-sudo chown -R www-data:www-data "$SERVE_DIR"
-
-echo "==> restarting backend ($PM2_APP)"
-pm2 restart "$PM2_APP" --update-env || echo "   (pm2 app '$PM2_APP' not found — skipped)"
-
-echo "==> [$TARGET] done  ->  $SERVE_DIR"
+echo "All builds done."
