@@ -4,20 +4,26 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/attendance.dart';
+import '../models/attendance_request.dart';
 import '../providers/attendance_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/presence_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../utils/formatters.dart';
 import '../widgets/app_avatar.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_card.dart';
+import '../widgets/attendance_success_sheet.dart';
+import '../services/notification_service.dart';
+import '../services/pending_scan_service.dart';
 import '../widgets/status_chip.dart';
+import 'new_request_screen.dart';
 import 'scan_screen.dart';
-import 'summary_screen.dart';
 
-/// The hero screen: gradient greeting header, a live attendance status card,
-/// the single context-aware action button, and a check-in/out timeline.
+/// The hero screen: gradient greeting header, a geofence pre-flight strip, a
+/// live attendance status card, the single context-aware action button, and a
+/// check-in/out timeline.
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
 
@@ -27,12 +33,22 @@ class HomeTab extends StatefulWidget {
 
 class _HomeTabState extends State<HomeTab> {
   Timer? _ticker;
+  PendingScan? _pendingScan;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) context.read<AttendanceProvider>().loadToday();
+      if (!mounted) return;
+      context.read<AttendanceProvider>().loadToday();
+      _loadPendingScan();
+      // Silent: reads an already-granted permission but never raises the OS
+      // dialog on first paint. Asking is tied to the employee tapping
+      // "Check my location" — a prompt that arrives unprovoked gets denied.
+      context
+          .read<PresenceProvider>()
+          .refresh(askPermission: false)
+          .then((_) => _rescheduleReminders());
     });
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && context.read<AttendanceProvider>().today?.isWorking == true) {
@@ -47,107 +63,67 @@ class _HomeTabState extends State<HomeTab> {
     super.dispose();
   }
 
+  /// Re-pins the daily reminders to the office's current working hours.
+  ///
+  /// Scheduled reminders survive restarts but not a change to office
+  /// settings, so they are refreshed on each launch once the office is known.
+  /// No-ops when the employee has not enabled reminders.
+  Future<void> _rescheduleReminders() async {
+    if (!mounted) return;
+    final office = context.read<PresenceProvider>().office;
+    if (office == null) return;
+    await NotificationService.instance.scheduleDailyReminders(
+      workStart: office.workStartTime,
+      workEnd: office.workEndTime,
+    );
+  }
+
+  Future<void> _loadPendingScan() async {
+    final pending = await PendingScanService.instance.read();
+    if (mounted) setState(() => _pendingScan = pending);
+  }
+
+  /// Turns a scan that never reached the server into a correction request,
+  /// pre-filled with the time the employee actually scanned.
+  Future<void> _resolvePendingScan(PendingScan pending) async {
+    final isCheckIn = pending.action == AttendanceAction.checkIn.apiValue;
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => NewRequestScreen(
+          initialDate: pending.attemptedAt,
+          initialType: isCheckIn
+              ? AttendanceRequestType.missedCheckIn
+              : AttendanceRequestType.missedCheckOut,
+          initialCheckIn: isCheckIn ? pending.attemptedAt : null,
+          initialCheckOut: isCheckIn ? null : pending.attemptedAt,
+        ),
+      ),
+    );
+    if (created != true) return;
+    await PendingScanService.instance.clear();
+    if (!mounted) return;
+    setState(() => _pendingScan = null);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Sent to your admin for approval.')),
+    );
+  }
+
+  Future<void> _dismissPendingScan() async {
+    await PendingScanService.instance.clear();
+    if (mounted) setState(() => _pendingScan = null);
+  }
+
   Future<void> _startAction(AttendanceAction action) async {
     final outcome = await Navigator.of(context).push<ScanOutcome>(
       MaterialPageRoute(builder: (_) => ScanScreen(action: action)),
     );
     if (outcome == null || !mounted) return;
-    await _showSuccessSheet(action, outcome);
-  }
-
-  Future<void> _showSuccessSheet(
-      AttendanceAction action, ScanOutcome outcome) async {
-    final attendance = outcome.attendance;
-    final DateTime when = (action == AttendanceAction.checkIn
-            ? attendance?.checkIn
-            : attendance?.checkOut) ??
-        DateTime.now();
-    final accent = action == AttendanceAction.checkIn
-        ? AppColors.success
-        : AppColors.danger;
-
-    await showModalBottomSheet<void>(
-      context: context,
-      builder: (sheetContext) {
-        final scheme = Theme.of(sheetContext).colorScheme;
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-                AppSpacing.xxl, 0, AppSpacing.xxl, AppSpacing.xxl),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 76,
-                  height: 76,
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: AppColors.tint),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.check_rounded, size: 46, color: accent),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                Text(
-                  '${action.label} successful',
-                  style: Theme.of(sheetContext)
-                      .textTheme
-                      .titleLarge
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  formatDateTime(when),
-                  style: Theme.of(sheetContext)
-                      .textTheme
-                      .bodyMedium
-                      ?.copyWith(color: scheme.onSurfaceVariant),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                if (attendance != null)
-                  Wrap(
-                    spacing: AppSpacing.sm,
-                    runSpacing: AppSpacing.sm,
-                    alignment: WrapAlignment.center,
-                    children: [
-                      StatusChip.attendance(attendance.status),
-                      if (attendance.isLate &&
-                          action == AttendanceAction.checkIn)
-                        const StatusChip(
-                            label: 'Marked late',
-                            color: AppColors.warning,
-                            icon: Icons.warning_amber_rounded),
-                      if (attendance.isEarlyOut &&
-                          action == AttendanceAction.checkOut)
-                        const StatusChip(
-                            label: 'Early check-out',
-                            color: AppColors.warning,
-                            icon: Icons.warning_amber_rounded),
-                      if (action == AttendanceAction.checkOut)
-                        StatusChip(
-                            label: 'Worked ${formatMinutes(attendance.workMinutes)}',
-                            color: AppColors.info,
-                            icon: Icons.timer_outlined),
-                    ],
-                  ),
-                if (outcome.message.isNotEmpty) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  Text(
-                    outcome.message,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(sheetContext).textTheme.bodyMedium,
-                  ),
-                ],
-                const SizedBox(height: AppSpacing.xl),
-                AppButton(
-                  label: 'Done',
-                  onPressed: () => Navigator.of(sheetContext).pop(),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+    await showAttendanceSuccessSheet(context, action, outcome);
+    if (mounted) {
+      // A successful scan means we were inside the fence; re-reading keeps
+      // the pre-flight strip honest for the next action of the day.
+      context.read<PresenceProvider>().refresh(askPermission: false);
+    }
   }
 
   @override
@@ -169,66 +145,31 @@ class _HomeTabState extends State<HomeTab> {
               fullName: auth.user?.name ?? '',
               now: now,
               topInset: topInset,
-              onSummary: _openSummary,
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg, AppSpacing.xl, AppSpacing.lg, AppSpacing.xxl),
+                  AppSpacing.lg, AppSpacing.xl, AppSpacing.lg, 96),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (_pendingScan != null) ...[
+                    _PendingScanCard(
+                      pending: _pendingScan!,
+                      onResolve: () => _resolvePendingScan(_pendingScan!),
+                      onDismiss: _dismissPendingScan,
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                  ],
+                  // Answers "will this work from here?" before anything is
+                  // tapped, so a geofence failure is never a surprise five
+                  // steps into the scan flow.
+                  const _PresenceCard(),
+                  const SizedBox(height: AppSpacing.lg),
                   _StatusCard(provider: attendance, now: now),
                   const SizedBox(height: AppSpacing.lg),
                   _ActionSection(
                     provider: attendance,
                     onAction: _startAction,
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  AppCard(
-                    onTap: _openSummary,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color:
-                                AppColors.seed.withValues(alpha: AppColors.tint),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(Icons.insights_rounded,
-                              color: AppColors.seed),
-                        ),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Monthly summary',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleSmall
-                                    ?.copyWith(fontWeight: FontWeight.w700),
-                              ),
-                              Text(
-                                'Working days, hours & attendance stats',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.chevron_right_rounded),
-                      ],
-                    ),
                   ),
                 ],
               ),
@@ -238,10 +179,201 @@ class _HomeTabState extends State<HomeTab> {
       ),
     );
   }
+}
 
-  void _openSummary() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const SummaryScreen()),
+/// Offers to recover a scan that never reached the server.
+///
+/// Shown only for connectivity failures — a scan the server rejected has an
+/// answer already and needs no rescue.
+class _PendingScanCard extends StatelessWidget {
+  const _PendingScanCard({
+    required this.pending,
+    required this.onResolve,
+    required this.onDismiss,
+  });
+
+  final PendingScan pending;
+  final VoidCallback onResolve;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final isCheckIn = pending.action == AttendanceAction.checkIn.apiValue;
+    final label = isCheckIn ? 'check-in' : 'check-out';
+
+    return AppCard(
+      borderColor: AppColors.warning.withValues(alpha: 0.45),
+      color: AppColors.warning.withValues(alpha: 0.06),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.cloud_off_rounded,
+                  color: AppColors.warning, size: 20),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  'Unsent $label',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Dismiss',
+                iconSize: 18,
+                onPressed: onDismiss,
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ],
+          ),
+          Text(
+            'Your $label at ${formatTime(pending.attemptedAt)} on '
+            '${formatDayDate(pending.attemptedAt)} could not reach the server. '
+            'Send it to your admin for approval with the original time.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppButton(
+            label: 'Send for approval',
+            icon: Icons.send_rounded,
+            variant: AppButtonVariant.tonal,
+            onPressed: onResolve,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Geofence pre-flight strip.
+///
+/// Shows one of: "You're at the office" (green), "You're 240 m away" with the
+/// allowed radius (amber), or a one-tap prompt to grant location. Never
+/// blocks the action button — GPS drift must not lock someone out of their
+/// own attendance, and the server is the real authority on the fence.
+class _PresenceCard extends StatelessWidget {
+  const _PresenceCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final presence = context.watch<PresenceProvider>();
+    final scheme = Theme.of(context).colorScheme;
+
+    final (Color accent, IconData icon, String title, String subtitle) = switch (
+        presence.state) {
+      PresenceState.checking => (
+          AppColors.info,
+          Icons.my_location_rounded,
+          'Checking your location…',
+          'Making sure you are within the office area.',
+        ),
+      PresenceState.atOffice => (
+          AppColors.success,
+          Icons.place_rounded,
+          "You're at the office",
+          presence.distanceLabel == null
+              ? 'Your scan will be accepted.'
+              : '${presence.distanceLabel} from the office centre — inside the allowed area.',
+        ),
+      PresenceState.away => (
+          AppColors.warning,
+          Icons.wrong_location_rounded,
+          "You're ${presence.distanceLabel ?? 'too far'} away",
+          'Scanning only works within '
+              '${presence.office?.radiusMeters ?? 0} m of the office. '
+              'Move closer before you scan.',
+        ),
+      PresenceState.permissionDenied => (
+          AppColors.slate,
+          Icons.location_disabled_rounded,
+          'Location not shared yet',
+          presence.message ??
+              'Allow location access so we can confirm you are at the office.',
+        ),
+      PresenceState.blocked => (
+          AppColors.danger,
+          Icons.location_off_rounded,
+          'Location is turned off',
+          presence.message ??
+              'Enable location for this app in your device settings.',
+        ),
+      PresenceState.unavailable => (
+          AppColors.slate,
+          Icons.cloud_off_rounded,
+          "Couldn't check your location",
+          presence.message ?? 'You can still try scanning.',
+        ),
+      PresenceState.unknown => (
+          AppColors.slate,
+          Icons.my_location_rounded,
+          'Check your location',
+          'See whether you are close enough to scan before you walk over.',
+        ),
+    };
+
+    final needsAction = presence.state != PresenceState.checking &&
+        presence.state != PresenceState.atOffice;
+
+    return AppCard(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: AppColors.tint),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: presence.isChecking
+                ? Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2.4, color: accent),
+                  )
+                : Icon(icon, color: accent),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w700, color: accent),
+                ),
+                Text(
+                  subtitle,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+          if (needsAction) ...[
+            const SizedBox(width: AppSpacing.sm),
+            IconButton.filledTonal(
+              tooltip: presence.needsSettings ? 'Open settings' : 'Check now',
+              icon: Icon(presence.needsSettings
+                  ? Icons.settings_rounded
+                  : Icons.refresh_rounded),
+              onPressed: () => presence.needsSettings
+                  ? presence.openSettings()
+                  : presence.refresh(),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -253,14 +385,12 @@ class _GreetingHeader extends StatelessWidget {
     required this.fullName,
     required this.now,
     required this.topInset,
-    required this.onSummary,
   });
 
   final String name;
   final String fullName;
   final DateTime now;
   final double topInset;
-  final VoidCallback onSummary;
 
   @override
   Widget build(BuildContext context) {
@@ -307,12 +437,8 @@ class _GreetingHeader extends StatelessWidget {
               ],
             ),
           ),
-          IconButton(
-            tooltip: 'Monthly summary',
-            onPressed: onSummary,
-            icon: const Icon(Icons.insights_rounded, color: Colors.white),
-          ),
-          const SizedBox(width: AppSpacing.xs),
+          // The summary lives in the Activity tab now — it used to have two
+          // entry points on this screen and none in the navigation.
           AppAvatar(name: fullName, radius: 26, onGradient: true),
         ],
       ),

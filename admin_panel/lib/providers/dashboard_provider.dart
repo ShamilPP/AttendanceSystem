@@ -14,13 +14,19 @@ class DashboardProvider extends ChangeNotifier {
   bool loadingStats = false;
   bool loadingTrends = false;
   String? error;
+  DateTime? lastUpdated;
 
-  Future<void> load() async {
-    loadingStats = true;
-    loadingTrends = true;
-    error = null;
-    notifyListeners();
+  /// [silent] refreshes in place without flipping the loading flags, so the
+  /// auto-refresh timer never blanks the numbers the admin is reading.
+  Future<void> load({bool silent = false}) async {
+    if (!silent) {
+      loadingStats = true;
+      loadingTrends = true;
+      error = null;
+      notifyListeners();
+    }
     await Future.wait([_fetchStats(), _fetchTrends()]);
+    lastUpdated = DateTime.now();
     notifyListeners();
   }
 

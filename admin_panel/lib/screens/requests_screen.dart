@@ -10,7 +10,9 @@ import '../widgets/app_avatar.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_card.dart';
 import '../widgets/app_feedback.dart';
+import '../widgets/page_scaffold.dart';
 import '../widgets/pagination_bar.dart';
+import '../widgets/skeleton.dart';
 import '../widgets/states.dart';
 import '../widgets/status_chip.dart';
 import '../widgets/table_wrapper.dart';
@@ -85,40 +87,44 @@ class _RequestsScreenState extends State<RequestsScreen>
     final provider = context.watch<RequestsProvider>();
     final theme = Theme.of(context);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Material(
-          color: theme.colorScheme.surface,
-          child: Column(
-            children: [
-              TabBar(
-                controller: _tabController,
-                isScrollable: true,
-                tabAlignment: TabAlignment.start,
-                dividerColor: theme.colorScheme.outlineVariant,
-                tabs: const [
-                  Tab(text: 'Pending'),
-                  Tab(text: 'Approved'),
-                  Tab(text: 'Rejected'),
-                ],
-              ),
-            ],
-          ),
+    return PageScaffold(
+      title: 'Requests',
+      description:
+          'Regularization requests from employees — approving one writes it '
+          'straight into their attendance record.',
+      actions: [
+        IconButton.filledTonal(
+          tooltip: 'Refresh',
+          icon: const Icon(Icons.refresh),
+          onPressed: provider.loading ? null : () => provider.fetch(),
         ),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            child: Column(
+      ],
+      child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TabBar(
+                    controller: _tabController,
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.start,
+                    dividerColor: Colors.transparent,
+                    tabs: const [
+                      Tab(text: 'Pending'),
+                      Tab(text: 'Approved'),
+                      Tab(text: 'Rejected'),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                const SizedBox(height: AppSpacing.lg),
                 if (provider.error != null)
                   ErrorBanner(
                       message: provider.error!,
                       onRetry: () => provider.fetch()),
                 Expanded(
                   child: provider.loading
-                      ? const LoadingState()
+                      ? const TableSkeleton(columns: 6)
                       : provider.records.isEmpty
                           ? EmptyState(
                               title: 'Nothing here',
@@ -217,9 +223,6 @@ class _RequestsScreenState extends State<RequestsScreen>
                 ),
               ],
             ),
-          ),
-        ),
-      ],
     );
   }
 }

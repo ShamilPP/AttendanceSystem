@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import 'providers/attendance_logs_provider.dart';
+import 'providers/attention_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/catalog_provider.dart';
 import 'providers/dashboard_provider.dart';
@@ -11,11 +13,9 @@ import 'providers/missing_checkouts_provider.dart';
 import 'providers/office_settings_provider.dart';
 import 'providers/reports_provider.dart';
 import 'providers/requests_provider.dart';
-import 'screens/login_screen.dart';
-import 'screens/shell_screen.dart';
+import 'router/app_router.dart';
 import 'services/api_client.dart';
 import 'theme/app_theme.dart';
-import 'widgets/states.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,14 +23,25 @@ Future<void> main() async {
   runApp(const AdminApp());
 }
 
-class AdminApp extends StatelessWidget {
+class AdminApp extends StatefulWidget {
   const AdminApp({super.key});
+
+  @override
+  State<AdminApp> createState() => _AdminAppState();
+}
+
+class _AdminAppState extends State<AdminApp> {
+  // Auth lives above the router because the router redirects on it and uses
+  // it as its refreshListenable.
+  late final AuthProvider _auth = AuthProvider()..restore();
+  late final GoRouter _router = buildRouter(_auth);
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()..restore()),
+        ChangeNotifierProvider.value(value: _auth),
+        ChangeNotifierProvider(create: (_) => AttentionProvider()),
         ChangeNotifierProvider(create: (_) => CatalogProvider()),
         ChangeNotifierProvider(create: (_) => DashboardProvider()),
         ChangeNotifierProvider(create: (_) => LiveAttendanceProvider()),
@@ -41,35 +52,14 @@ class AdminApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => OfficeSettingsProvider()),
         ChangeNotifierProvider(create: (_) => ReportsProvider()),
       ],
-      child: MaterialApp(
+      child: MaterialApp.router(
         title: 'NexCrew Admin',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light(),
         darkTheme: AppTheme.dark(),
         themeMode: ThemeMode.system,
-        home: const _RootGate(),
+        routerConfig: _router,
       ),
     );
-  }
-}
-
-/// Routes between the splash spinner, login and the admin shell.
-class _RootGate extends StatelessWidget {
-  const _RootGate();
-
-  @override
-  Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    switch (auth.status) {
-      case AuthStatus.restoring:
-        return const Scaffold(
-          body: LoadingState(message: 'Restoring your session…'),
-        );
-      case AuthStatus.authenticated:
-        return const ShellScreen();
-      case AuthStatus.unauthenticated:
-      case AuthStatus.authenticating:
-        return const LoginScreen();
-    }
   }
 }

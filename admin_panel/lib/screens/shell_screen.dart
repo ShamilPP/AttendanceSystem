@@ -1,34 +1,87 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../providers/attention_provider.dart';
 import '../providers/auth_provider.dart';
+import '../router/routes.dart';
+import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../widgets/app_avatar.dart';
-import 'attendance_logs_screen.dart';
-import 'catalog_screen.dart';
-import 'dashboard_screen.dart';
-import 'employees_screen.dart';
-import 'live_attendance_screen.dart';
-import 'missing_checkouts_screen.dart';
-import 'office_settings_screen.dart';
-import 'qr_display_screen.dart';
-import 'reports_screen.dart';
-import 'requests_screen.dart';
 
-class _Section {
-  const _Section(this.label, this.icon, this.selectedIcon, this.builder);
+/// A top-level navigation entry.
+class _NavItem {
+  const _NavItem(
+    this.label,
+    this.icon,
+    this.selectedIcon,
+    this.route, {
+    this.badge,
+  });
 
   final String label;
   final IconData icon;
   final IconData selectedIcon;
-  final WidgetBuilder builder;
+
+  /// The route this item navigates to.
+  final String route;
+
+  /// Reads a live count off [AttentionProvider] for the badge, when relevant.
+  final int Function(AttentionProvider)? badge;
+
+  /// A route belongs to this item when it is the item's route or nested below
+  /// it, so `/attendance/logs` keeps "Attendance" highlighted.
+  bool matches(String location) =>
+      route == Routes.overview
+          ? location == Routes.overview
+          : location == route || location.startsWith('$route/');
 }
 
+/// Primary work: the daily loop of an attendance admin.
+const _primaryNav = <_NavItem>[
+  _NavItem('Overview', Icons.dashboard_outlined, Icons.dashboard,
+      Routes.overview),
+  _NavItem(
+    'Attendance',
+    Icons.fact_check_outlined,
+    Icons.fact_check,
+    Routes.attendance,
+    badge: _missingBadge,
+  ),
+  _NavItem(
+    'Requests',
+    Icons.pending_actions_outlined,
+    Icons.pending_actions,
+    Routes.requests,
+    badge: _pendingBadge,
+  ),
+  _NavItem('People', Icons.people_alt_outlined, Icons.people_alt,
+      Routes.people),
+  _NavItem('Reports', Icons.insert_chart_outlined, Icons.insert_chart,
+      Routes.reports),
+];
+
+/// Setup: touched rarely, so it is visually separated from the daily loop.
+const _secondaryNav = <_NavItem>[
+  _NavItem('QR code', Icons.qr_code_2_outlined, Icons.qr_code_2, Routes.qr),
+  _NavItem('Settings', Icons.settings_outlined, Icons.settings,
+      Routes.settings),
+];
+
+int _missingBadge(AttentionProvider a) => a.missingCheckouts;
+int _pendingBadge(AttentionProvider a) => a.pendingRequests;
+
 /// Authenticated layout: responsive navigation (extended rail → icon rail →
-/// drawer) + a top bar with the page title and today's date.
+/// drawer) around the routed [child].
+///
+/// The shell is built once by the `ShellRoute`, so switching sections no
+/// longer rebuilds — and reset the filters and scroll position of — the
+/// screen being left.
 class ShellScreen extends StatefulWidget {
-  const ShellScreen({super.key});
+  const ShellScreen({super.key, required this.child});
+
+  final Widget child;
 
   @override
   State<ShellScreen> createState() => _ShellScreenState();
@@ -36,47 +89,36 @@ class ShellScreen extends StatefulWidget {
 
 class _ShellScreenState extends State<ShellScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  int _index = 0;
 
-  static final List<_Section> _sections = [
-    _Section('Dashboard', Icons.dashboard_outlined, Icons.dashboard,
-        (_) => const DashboardScreen()),
-    _Section('Live Attendance', Icons.sensors_outlined, Icons.sensors,
-        (_) => const LiveAttendanceScreen()),
-    _Section('Attendance Logs', Icons.receipt_long_outlined, Icons.receipt_long,
-        (_) => const AttendanceLogsScreen()),
-    _Section('Requests', Icons.pending_actions_outlined, Icons.pending_actions,
-        (_) => const RequestsScreen()),
-    _Section('Missing Check-outs', Icons.timer_off_outlined, Icons.timer_off,
-        (_) => const MissingCheckoutsScreen()),
-    _Section('Employees', Icons.people_alt_outlined, Icons.people_alt,
-        (_) => const EmployeesScreen()),
-    _Section('Departments', Icons.account_tree_outlined, Icons.account_tree,
-        (_) => const CatalogScreen()),
-    _Section('Office Settings', Icons.settings_outlined, Icons.settings,
-        (_) => const OfficeSettingsScreen()),
-    _Section('QR Display', Icons.qr_code_2_outlined, Icons.qr_code_2,
-        (_) => const QrDisplayScreen()),
-    _Section('Reports', Icons.insert_chart_outlined, Icons.insert_chart,
-        (_) => const ReportsScreen()),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<AttentionProvider>().start();
+    });
+  }
 
-  void _select(int i) {
-    setState(() => _index = i);
-    // Close the drawer if it is open (compact layout).
+  @override
+  void dispose() {
+    // The shell only unmounts on logout; stop polling so the timer does not
+    // keep firing 401s against a cleared token.
+    context.read<AttentionProvider>().stop();
+    super.dispose();
+  }
+
+  void _go(String route) {
+    context.go(route);
     if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
       _scaffoldKey.currentState?.closeDrawer();
     }
   }
-
-  Future<void> _logout() => context.read<AuthProvider>().logout();
 
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
     final compact = width < AppBreakpoints.compact;
     final extended = width >= AppBreakpoints.railExtended;
-    final section = _sections[_index];
+    final location = GoRouterState.of(context).uri.path;
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -84,35 +126,30 @@ class _ShellScreenState extends State<ShellScreen> {
       drawer: compact
           ? Drawer(
               child: _NavContent(
-                sections: _sections,
-                selectedIndex: _index,
+                location: location,
                 extended: true,
-                onSelect: _select,
-                onLogout: _logout,
+                onSelect: _go,
               ),
             )
           : null,
-      appBar: _TopBar(
-        title: section.label,
-        scaffoldKey: _scaffoldKey,
-        showMenuButton: compact,
-      ),
+      appBar: compact
+          ? _CompactTopBar(scaffoldKey: _scaffoldKey)
+          : null,
       body: Row(
         children: [
           if (!compact)
-            _NavRail(
-              sections: _sections,
-              selectedIndex: _index,
+            _NavContent(
+              location: location,
               extended: extended,
-              onSelect: (i) => setState(() => _index = i),
-              onLogout: _logout,
+              onSelect: _go,
             ),
           if (!compact)
-            VerticalDivider(width: 1, thickness: 1, color: theme.colorScheme.outlineVariant),
+            VerticalDivider(
+                width: 1, thickness: 1, color: theme.colorScheme.outlineVariant),
           Expanded(
             child: ColoredBox(
               color: theme.scaffoldBackgroundColor,
-              child: section.builder(context),
+              child: widget.child,
             ),
           ),
         ],
@@ -121,142 +158,80 @@ class _ShellScreenState extends State<ShellScreen> {
   }
 }
 
-/// Top bar: (menu on compact) + page title + today's date.
-class _TopBar extends StatelessWidget implements PreferredSizeWidget {
-  const _TopBar({
-    required this.title,
-    required this.showMenuButton,
-    required this.scaffoldKey,
-  });
+/// Slim app bar used only on narrow screens (each page renders its own title
+/// via `PageScaffold`, so the bar just carries the menu button and account).
+class _CompactTopBar extends StatelessWidget implements PreferredSizeWidget {
+  const _CompactTopBar({required this.scaffoldKey});
 
-  final String title;
-  final bool showMenuButton;
   final GlobalKey<ScaffoldState> scaffoldKey;
 
   @override
-  Size get preferredSize => const Size.fromHeight(64);
+  Size get preferredSize => const Size.fromHeight(56);
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final auth = context.watch<AuthProvider>();
-    final today = DateFormat('EEEE, d MMMM yyyy').format(DateTime.now());
+    final theme = Theme.of(context);
 
     return AppBar(
-      toolbarHeight: 64,
-      titleSpacing: showMenuButton ? 0 : 24,
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(title,
-              style: theme.textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w700)),
-          Text(today,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-        ],
+      toolbarHeight: 56,
+      titleSpacing: 0,
+      leading: IconButton(
+        icon: const Icon(Icons.menu),
+        onPressed: () => scaffoldKey.currentState?.openDrawer(),
       ),
+      title: Text('NexCrew',
+          style: theme.textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.w800)),
       actions: [
-        if (showMenuButton)
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: PopupMenuButton<String>(
-              tooltip: 'Account',
-              offset: const Offset(0, 48),
-              onSelected: (v) {
-                if (v == 'logout') context.read<AuthProvider>().logout();
-              },
-              itemBuilder: (_) => const [
-                PopupMenuItem(
-                  value: 'logout',
-                  child: Row(children: [
-                    Icon(Icons.logout, size: 18),
-                    SizedBox(width: 10),
-                    Text('Log out'),
-                  ]),
-                ),
-              ],
-              child: AppAvatar(name: auth.user?.name ?? 'Admin', radius: 16),
-            ),
-          )
-        else
-          const SizedBox(width: 12),
-      ],
-      leading: showMenuButton
-          ? IconButton(
-              icon: const Icon(Icons.menu),
-              onPressed: () => scaffoldKey.currentState?.openDrawer(),
-            )
-          : null,
-    );
-  }
-}
-
-/// The scrolling navigation rail used on tablet/desktop widths.
-class _NavRail extends StatelessWidget {
-  const _NavRail({
-    required this.sections,
-    required this.selectedIndex,
-    required this.extended,
-    required this.onSelect,
-    required this.onLogout,
-  });
-
-  final List<_Section> sections;
-  final int selectedIndex;
-  final bool extended;
-  final ValueChanged<int> onSelect;
-  final VoidCallback onLogout;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) => SingleChildScrollView(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: constraints.maxHeight),
-          child: IntrinsicHeight(
-            child: _NavContent(
-              sections: sections,
-              selectedIndex: selectedIndex,
-              extended: extended,
-              onSelect: onSelect,
-              onLogout: onLogout,
-              rail: true,
-            ),
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: PopupMenuButton<String>(
+            tooltip: 'Account',
+            offset: const Offset(0, 48),
+            onSelected: (v) {
+              if (v == 'logout') context.read<AuthProvider>().logout();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'logout',
+                child: Row(children: [
+                  Icon(Icons.logout, size: 18),
+                  SizedBox(width: 10),
+                  Text('Log out'),
+                ]),
+              ),
+            ],
+            child: AppAvatar(name: auth.user?.name ?? 'Admin', radius: 16),
           ),
         ),
-      ),
+      ],
     );
   }
 }
 
-/// Shared navigation body used by both the rail and the drawer.
+/// Navigation body shared by the rail and the drawer.
 class _NavContent extends StatelessWidget {
   const _NavContent({
-    required this.sections,
-    required this.selectedIndex,
+    required this.location,
     required this.extended,
     required this.onSelect,
-    required this.onLogout,
-    this.rail = false,
   });
 
-  final List<_Section> sections;
-  final int selectedIndex;
+  final String location;
   final bool extended;
-  final ValueChanged<int> onSelect;
-  final VoidCallback onLogout;
-  final bool rail;
+  final ValueChanged<String> onSelect;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final auth = context.watch<AuthProvider>();
+    final attention = context.watch<AttentionProvider>();
+    final today = DateFormat('EEE, d MMM').format(DateTime.now());
 
     Widget brand() => Padding(
           padding: EdgeInsets.fromLTRB(
-              extended ? 20 : 12, 20, extended ? 20 : 12, 12),
+              extended ? 20 : 12, 20, extended ? 20 : 12, 14),
           child: Row(
             mainAxisAlignment:
                 extended ? MainAxisAlignment.start : MainAxisAlignment.center,
@@ -275,8 +250,8 @@ class _NavContent extends StatelessWidget {
                   ),
                   borderRadius: BorderRadius.circular(11),
                 ),
-                child: const Icon(Icons.fingerprint,
-                    color: Colors.white, size: 22),
+                child:
+                    const Icon(Icons.fingerprint, color: Colors.white, size: 22),
               ),
               if (extended) ...[
                 const SizedBox(width: 12),
@@ -288,7 +263,7 @@ class _NavContent extends StatelessWidget {
                       Text('NexCrew',
                           style: theme.textTheme.titleMedium
                               ?.copyWith(fontWeight: FontWeight.w800)),
-                      Text('Attendance Admin',
+                      Text(today,
                           style: theme.textTheme.labelSmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant)),
                     ],
@@ -299,13 +274,35 @@ class _NavContent extends StatelessWidget {
           ),
         );
 
-    Widget navItem(int i, _Section s) {
-      final selected = i == selectedIndex;
+    Widget navItem(_NavItem item) {
+      final selected = item.matches(location);
+      final count = item.badge?.call(attention) ?? 0;
+      final fg = selected
+          ? theme.colorScheme.onSurface
+          : theme.colorScheme.onSurfaceVariant;
+
+      final badge = count == 0
+          ? null
+          : Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+              constraints: const BoxConstraints(minWidth: 20),
+              decoration: BoxDecoration(
+                color: AppColors.late,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                count > 99 ? '99+' : '$count',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.labelSmall?.copyWith(
+                    color: Colors.white, fontWeight: FontWeight.w700),
+              ),
+            );
+
       final content = Container(
-        margin: EdgeInsets.symmetric(
-            horizontal: extended ? 12 : 8, vertical: 2),
-        padding: EdgeInsets.symmetric(
-            horizontal: extended ? 14 : 0, vertical: 11),
+        margin:
+            EdgeInsets.symmetric(horizontal: extended ? 12 : 8, vertical: 2),
+        padding:
+            EdgeInsets.symmetric(horizontal: extended ? 14 : 0, vertical: 11),
         decoration: BoxDecoration(
           color: selected ? theme.colorScheme.primaryContainer : null,
           borderRadius: BorderRadius.circular(12),
@@ -314,44 +311,68 @@ class _NavContent extends StatelessWidget {
           mainAxisAlignment:
               extended ? MainAxisAlignment.start : MainAxisAlignment.center,
           children: [
-            Icon(
-              selected ? s.selectedIcon : s.icon,
-              size: 22,
-              color: selected
-                  ? theme.colorScheme.onPrimaryContainer
-                  : theme.colorScheme.onSurfaceVariant,
+            // Collapsed rail has no room for a label, so the badge rides the
+            // icon instead of sitting beside it.
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  selected ? item.selectedIcon : item.icon,
+                  size: 22,
+                  color: selected
+                      ? theme.colorScheme.onPrimaryContainer
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
+                if (!extended && badge != null)
+                  Positioned(right: -8, top: -6, child: badge),
+              ],
             ),
             if (extended) ...[
               const SizedBox(width: 14),
               Expanded(
                 child: Text(
-                  s.label,
+                  item.label,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight:
-                        selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected
-                        ? theme.colorScheme.onSurface
-                        : theme.colorScheme.onSurfaceVariant,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: fg,
                   ),
                 ),
               ),
+              ?badge,
             ],
           ],
         ),
       );
+
       return Tooltip(
-        message: extended ? '' : s.label,
+        message: extended
+            ? ''
+            : (count > 0 ? '${item.label} ($count)' : item.label),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
             borderRadius: BorderRadius.circular(12),
-            onTap: () => onSelect(i),
+            onTap: () => onSelect(item.route),
             child: content,
           ),
         ),
       );
     }
+
+    Widget groupLabel(String text) => extended
+        ? Padding(
+            padding: const EdgeInsets.fromLTRB(26, 16, 20, 6),
+            child: Text(
+              text.toUpperCase(),
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                letterSpacing: 0.8,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          )
+        : const SizedBox(height: 14);
 
     Widget footer() => Padding(
           padding: EdgeInsets.all(extended ? 12 : 8),
@@ -379,7 +400,7 @@ class _NavContent extends StatelessWidget {
                     IconButton(
                       tooltip: 'Log out',
                       icon: const Icon(Icons.logout, size: 20),
-                      onPressed: onLogout,
+                      onPressed: () => context.read<AuthProvider>().logout(),
                     ),
                   ],
                 )
@@ -390,7 +411,7 @@ class _NavContent extends StatelessWidget {
                     IconButton(
                       tooltip: 'Log out',
                       icon: const Icon(Icons.logout, size: 20),
-                      onPressed: onLogout,
+                      onPressed: () => context.read<AuthProvider>().logout(),
                     ),
                   ],
                 ),
@@ -404,13 +425,15 @@ class _NavContent extends StatelessWidget {
         children: [
           brand(),
           Divider(height: 1, color: theme.colorScheme.outlineVariant),
-          const SizedBox(height: AppSpacing.sm),
           Expanded(
             child: SingleChildScrollView(
               child: Column(
                 children: [
-                  for (var i = 0; i < sections.length; i++)
-                    navItem(i, sections[i]),
+                  const SizedBox(height: AppSpacing.sm),
+                  for (final item in _primaryNav) navItem(item),
+                  groupLabel('Setup'),
+                  for (final item in _secondaryNav) navItem(item),
+                  const SizedBox(height: AppSpacing.sm),
                 ],
               ),
             ),

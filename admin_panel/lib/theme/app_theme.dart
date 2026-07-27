@@ -39,6 +39,13 @@ class AppTheme {
     final scaffoldBg =
         isDark ? scheme.surface : scheme.surfaceContainerLowest;
 
+    // `outlineVariant` is very dim on a dark surface — fields drawn with it
+    // dissolve into the background and stop reading as inputs at all. Dark
+    // mode borrows the brighter `outline` at partial opacity instead.
+    final fieldBorder = isDark
+        ? scheme.outline.withValues(alpha: 0.55)
+        : scheme.outlineVariant;
+
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
@@ -115,11 +122,11 @@ class AppTheme {
             const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: AppRadius.fieldR,
-          borderSide: BorderSide(color: scheme.outlineVariant),
+          borderSide: BorderSide(color: fieldBorder),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: AppRadius.fieldR,
-          borderSide: BorderSide(color: scheme.outlineVariant),
+          borderSide: BorderSide(color: fieldBorder),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: AppRadius.fieldR,
@@ -138,6 +145,26 @@ class AppTheme {
         ),
         floatingLabelStyle: textTheme.bodyMedium?.copyWith(
           color: scheme.primary,
+        ),
+      ),
+      // Material's default leaves unselected segments on a light surface,
+      // which renders as a glaring white block in dark mode.
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          backgroundColor: WidgetStateProperty.resolveWith((states) =>
+              states.contains(WidgetState.selected)
+                  ? scheme.primaryContainer
+                  : Colors.transparent),
+          foregroundColor: WidgetStateProperty.resolveWith((states) =>
+              states.contains(WidgetState.selected)
+                  ? scheme.onPrimaryContainer
+                  : scheme.onSurfaceVariant),
+          side: WidgetStatePropertyAll(BorderSide(color: fieldBorder)),
+          textStyle: WidgetStatePropertyAll(
+              textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600)),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
@@ -161,13 +188,6 @@ class AppTheme {
         style: TextButton.styleFrom(
           shape: const RoundedRectangleBorder(borderRadius: AppRadius.buttonR),
           textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
-        ),
-      ),
-      segmentedButtonTheme: SegmentedButtonThemeData(
-        style: ButtonStyle(
-          shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
         ),
       ),
       chipTheme: ChipThemeData(

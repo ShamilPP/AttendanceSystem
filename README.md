@@ -1,14 +1,26 @@
-# Employee Attendance Management System
+# NexCrew Attendance
 
-QR + geofence based attendance tracking with a Flutter employee app, a Flutter Web admin panel, and a Node.js/Express/MongoDB backend.
+QR + geofence based attendance tracking. Two front-ends — **NexCrew Attendance** (employees) and **NexCrew Admin** (administrators) — over a Node.js/Express/MongoDB backend. Both front-ends ship as Flutter Web; the employee app also builds as an Android/iOS app.
 
 | Directory | What it is |
 |---|---|
-| [`backend/`](backend/) | REST API — Node.js (Express) + MongoDB (Mongoose), JWT auth, encrypted rotating QR, geofencing, Excel import/export |
-| [`mobile_app/`](mobile_app/) | Flutter app for employees — scan QR to check in/out & manage breaks, history, monthly summary, requests, profile, documents |
-| [`admin_panel/`](admin_panel/) | Flutter Web panel for admins — dashboard, live attendance, corrections, employees, office/geofence settings, QR display, reports |
+| [`backend/`](backend/) | REST API — Node.js (Express) + MongoDB (Mongoose), JWT auth, encrypted permanent QR, geofencing, Excel import/export |
+| [`mobile_app/`](mobile_app/) | **NexCrew Attendance** — employee app: geofence pre-flight, scan QR to check in/out, activity history + monthly summary, requests, profile, documents |
+| [`admin_panel/`](admin_panel/) | **NexCrew Admin** — overview, attendance (live/logs/missing check-outs), requests, people, office settings, QR + kiosk, reports |
+| [`tools/generate_icons.py`](tools/generate_icons.py) | Regenerates every app icon for both apps from code |
 | [`docs/PLAN.md`](docs/PLAN.md) | Product requirements |
 | [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md) | The REST API contract all three apps follow |
+| [`docs/DESIGN_SPEC.md`](docs/DESIGN_SPEC.md) | Shared design system + information architecture |
+
+## Branding
+
+| | Employee app | Admin panel |
+|---|---|---|
+| Name | NexCrew Attendance | NexCrew Admin |
+| Short name | NexCrew | NexCrew Admin |
+| Icon | fingerprint on indigo `#6366F1 → #4338CA` | fingerprint on navy-indigo `#0F172A → #3730A3` |
+
+Icons are generated, not hand-drawn — edit the palette or glyph in [`tools/generate_icons.py`](tools/generate_icons.py) and re-run it to restyle all 30 files at once. The Dart package names (`attendance_admin`, `attendance_mobile`) and the Android `applicationId` (`com.nexcrew.attendance_mobile`) are deliberately unchanged: they are identifiers, and changing the applicationId would make an update install as a separate app.
 
 ## Quick start
 

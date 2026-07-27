@@ -14,9 +14,11 @@ import '../utils/formats.dart';
 import '../widgets/app_avatar.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_card.dart';
+import '../widgets/form_row.dart';
 import '../widgets/app_feedback.dart';
 import '../widgets/pagination_bar.dart';
 import '../widgets/picker_fields.dart';
+import '../widgets/skeleton.dart';
 import '../widgets/states.dart';
 import '../widgets/status_chip.dart';
 import '../widgets/table_wrapper.dart';
@@ -155,9 +157,8 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
     final provider = context.watch<EmployeesProvider>();
     final catalog = context.watch<CatalogProvider>();
 
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: Column(
+    // Page padding/title come from the enclosing PageScaffold.
+    return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AppCard(
@@ -264,7 +265,7 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
                 message: provider.error!, onRetry: () => provider.fetch()),
           Expanded(
             child: provider.loading
-                ? const LoadingState(message: 'Loading employees…')
+                ? const TableSkeleton(columns: 6)
                 : provider.records.isEmpty
                     ? EmptyState(
                         title: 'No employees',
@@ -345,7 +346,6 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
             onPageChanged: (page) => provider.fetch(toPage: page),
           ),
         ],
-      ),
     );
   }
 }
@@ -483,9 +483,8 @@ class _EmployeeDialogState extends State<_EmployeeDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(children: [
-                  Expanded(
-                    child: TextFormField(
+                FormRow(children: [
+                  TextFormField(
                       controller: _employeeIdController,
                       decoration: InputDecoration(
                         labelText: 'Employee ID',
@@ -493,22 +492,17 @@ class _EmployeeDialogState extends State<_EmployeeDialog> {
                             isEdit ? null : 'Leave blank to auto-generate',
                       ),
                     ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: TextFormField(
+                  TextFormField(
                       controller: _nameController,
                       decoration: const InputDecoration(labelText: 'Name *'),
                       validator: (v) => (v == null || v.trim().isEmpty)
                           ? 'Name is required'
                           : null,
                     ),
-                  ),
                 ]),
                 const SizedBox(height: AppSpacing.md),
-                Row(children: [
-                  Expanded(
-                    child: TextFormField(
+                FormRow(children: [
+                  TextFormField(
                       controller: _emailController,
                       decoration: const InputDecoration(labelText: 'Email *'),
                       validator: (v) {
@@ -518,10 +512,7 @@ class _EmployeeDialogState extends State<_EmployeeDialog> {
                         return null;
                       },
                     ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: TextFormField(
+                  TextFormField(
                       controller: _passwordController,
                       obscureText: true,
                       decoration: InputDecoration(
@@ -539,12 +530,10 @@ class _EmployeeDialogState extends State<_EmployeeDialog> {
                         return null;
                       },
                     ),
-                  ),
                 ]),
                 const SizedBox(height: AppSpacing.md),
-                Row(children: [
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
+                FormRow(children: [
+                  DropdownButtonFormField<String>(
                       initialValue: _departmentId,
                       decoration:
                           const InputDecoration(labelText: 'Department *'),
@@ -554,10 +543,7 @@ class _EmployeeDialogState extends State<_EmployeeDialog> {
                       ],
                       onChanged: (v) => setState(() => _departmentId = v),
                     ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
+                  DropdownButtonFormField<String>(
                       initialValue: _designationId,
                       decoration:
                           const InputDecoration(labelText: 'Designation *'),
@@ -567,25 +553,19 @@ class _EmployeeDialogState extends State<_EmployeeDialog> {
                       ],
                       onChanged: (v) => setState(() => _designationId = v),
                     ),
-                  ),
                 ]),
                 const SizedBox(height: AppSpacing.md),
-                Row(children: [
-                  Expanded(
-                    child: TextFormField(
+                FormRow(children: [
+                  TextFormField(
                       controller: _phoneController,
                       decoration: const InputDecoration(labelText: 'Phone'),
                     ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: DatePickerField(
+                  DatePickerField(
                       label: 'Joining date',
                       value: _joiningDate,
                       allowClear: true,
                       onChanged: (d) => setState(() => _joiningDate = d),
                     ),
-                  ),
                 ]),
                 const SizedBox(height: AppSpacing.md),
                 TextFormField(

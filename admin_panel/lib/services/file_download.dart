@@ -1,32 +1,12 @@
-import 'dart:js_interop';
-import 'dart:typed_data';
-
-import 'package:web/web.dart' as web;
-
-/// Triggers a browser download of [bytes] as [filename].
+/// Browser file download, behind a conditional import.
 ///
-/// Uses `package:web` + `dart:js_interop` (dart:html is deprecated): creates
-/// a Blob, points a temporary anchor at an object URL, clicks it, cleans up.
-void downloadFileBytes({
-  required Uint8List bytes,
-  required String filename,
-  String mimeType = 'application/octet-stream',
-}) {
-  final blob = web.Blob(
-    <JSAny>[bytes.toJS].toJS,
-    web.BlobPropertyBag(type: mimeType),
-  );
-  final url = web.URL.createObjectURL(blob);
-  final anchor = web.HTMLAnchorElement()
-    ..href = url
-    ..download = filename
-    ..style.display = 'none';
-  web.document.body?.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  web.URL.revokeObjectURL(url);
-}
+/// The real implementation needs `dart:js_interop`, which only exists on the
+/// web. Importing it unconditionally made every screen that offers an export
+/// impossible to compile under `flutter test` (the VM has no js_interop), so
+/// the whole People/Reports area was untestable. This facade picks the web
+/// implementation when compiling for the browser and a throwing stub anywhere
+/// else, which costs nothing in production and keeps the screens testable.
+library;
 
-/// MIME type for `.xlsx` workbooks.
-const String xlsxMimeType =
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+export 'file_download_stub.dart'
+    if (dart.library.js_interop) 'file_download_web.dart';

@@ -13,6 +13,26 @@ class LiveAttendanceProvider extends ChangeNotifier {
   String? error;
   DateTime? lastUpdated;
 
+  /// `NOT_IN | WORKING | CHECKED_OUT | ON_LEAVE`, or null for everyone.
+  ///
+  /// The live endpoint has no status parameter, so this filters the fetched
+  /// rows client-side. It exists so a dashboard stat tile can hand the board
+  /// a status and answer "who?" without another round trip.
+  String? statusFilter;
+
+  /// Rows after the status filter — what the table should render.
+  List<LiveRecord> get visibleRecords {
+    final all = data?.records ?? const <LiveRecord>[];
+    if (statusFilter == null) return all;
+    return all.where((r) => r.liveStatus == statusFilter).toList();
+  }
+
+  void setStatusFilter(String? status) {
+    if (statusFilter == status) return;
+    statusFilter = status;
+    notifyListeners();
+  }
+
   Future<void> fetch({bool silent = false}) async {
     if (!silent) {
       loading = true;

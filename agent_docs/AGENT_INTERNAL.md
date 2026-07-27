@@ -38,7 +38,41 @@ Three apps, one contract:
 
 **NOT a git repository** (as of 2026-07-07). If initializing git later: .gitignore must exclude `node_modules/`, `backend/.env`, `backend/uploads/*`, Flutter `build/`, `agent_docs/` stays IN the repo (it is the project brain).
 
-## 2. Current status — v2 COMPLETE & VERIFIED (2026-07-08)
+## 2. Current status — v3 UX/IA REWORK COMPLETE (2026-07-27)
+
+**v3 is client-side only. Backend and `docs/API_CONTRACT.md` are UNCHANGED — do not "sync" them; nothing moved.** User's brief: "ui and workflow is bad… analyse everything how can make it better." Analysis found the visual layer was fine (the v2 design system holds up); the real defects were **information architecture and workflow**. Full scope approved, both new deps approved.
+
+| Area | What changed | Why (do not undo without reading this) |
+|---|---|---|
+| **Admin routing** | `go_router` (14.8.1) + `lib/router/app_router.dart`. Every section has a URL; `ShellRoute` builds the shell **once**. | It's a *web* app that had `int _index` state: no back button, no bookmarks, no deep links, and every nav switch rebuilt the outgoing screen, dumping its filters + scroll. |
+| **Admin nav** | 10 flat items → **5 daily** (Overview, Attendance, Requests, People, Reports) + **2 setup** (QR code, Settings), with live badges. | Live/Logs/Missing were 4 separate top-level items showing the same data at different time horizons. "Departments" was also mislabelled — it opened a screen containing departments *and* designations. |
+| **Admin dashboard** | "Needs your attention" card (pending requests + missing check-outs, with action buttons) at the top; **every headcount tile drills into the filtered live board**; silent 60s auto-refresh. | Stat tiles had no `onTap`: "Absent: 5" never said *who*. The two queues an admin must act on daily were invisible until you navigated to them. |
+| **Kiosk** | New `/kiosk` route **outside** the shell; Regenerate is hidden there. | It's left running on a lobby display — a stray click must never invalidate everyone's QR. |
+| **Mobile pre-flight** | `PresenceProvider` + Home strip: resolves the geofence *before* the camera opens ("You're at the office" / "240 m away"). | The old flow asked for GPS **after** the QR was scanned — 5 steps to learn a 403 that was knowable at step 0. |
+| **Mobile permission timing** | First Home load checks **silently** (`askPermission: false`); the OS dialog only ever fires from a deliberate tap. | Permission was requested mid-scan, the worst possible moment; a denial stranded the user with no path forward. |
+| **Mobile reminders** | `flutter_local_notifications` + `NotificationService`, times driven by office settings, toggle in Profile. | **The admin's entire "Missing check-outs" screen is a symptom of nobody being reminded.** This attacks the source. |
+| **Mobile nav** | History + Summary merged into one **Activity** tab; context-aware scan FAB (suppressed on Home). | Summary had *two* entry points on Home and none in the nav, while History — the same data — was a tab. |
+| **Mobile recovery** | History detail sheet → "Request a correction" (date pre-filled). Unsent-scan card on Home. | There was zero link from history to the requests flow. |
+
+### ⚠️ Design decision worth preserving: NO silent scan replay
+
+The obvious "offline queue" is **wrong here and was deliberately rejected**. `POST /attendance/scan` timestamps on *receipt*, so replaying a queued 09:04 check-in at 11:00 files it at 11:00 — worse than losing it, because it looks correct. Instead `PendingScanService` records the attempt (connectivity failures only, `statusCode == 0` — never a server *rejection* like bad QR/geofence/wrong state, which already has an answer) and Home offers to convert it into a regularization request pre-filled with the real scan time. That path takes an explicit timestamp and goes through admin review, which is exactly what a disputed time should do. Entries self-expire after 24h.
+
+### ⚠️ The two haversines must stay identical
+
+`PresenceProvider.distanceMetersBetween` mirrors `backend/src/utils/geo.js` exactly (same formula, R = 6371000). **Verified identical on 2026-07-27.** If they drift, the app tells employees they're inside a fence the server rejects. `mobile_app/test/presence_test.dart` guards the client side.
+
+The pre-flight is a **hint, never a gate** — the action button stays enabled regardless of what it says. GPS drift must not lock somebody out of their own attendance; the server is the only authority.
+
+**v3 verification (2026-07-27):** admin `flutter analyze` clean + 3/3 tests + `flutter build web --release` OK; mobile `flutter analyze` clean + **27/27** tests (was 18; +9 new in `presence_test.dart`) + `flutter build web --release` OK.
+
+**v3 NOT done / follow-ups:**
+1. **Still never demoed on a real device or in a real browser** (this predates v3 — machine-verified only). v3 raises the stakes: the presence strip, the notification toggle and the FAB have never been seen running.
+2. `flutter_local_notifications` has **no web implementation**. The employee app is deployed as Flutter *web* (§2c), so on that build `NotificationService.init()` throws, is caught, and `_available` stays false → the toggle reports "blocked". Intentional and safe, but it means **reminders only work on the APK**, not the hosted staff app. If reminders matter on web, that needs the Web Notifications API or server push.
+3. Android exact-alarm/battery-saver restrictions can silently drop reminders; `AndroidScheduleMode.inexactAllowWhileIdle` is used to stay permission-light.
+4. ~~`deploy-web.sh` bundles are stale~~ — refreshed in v3.1 (§2d).
+
+## 2b. Previous status — v2 COMPLETE & VERIFIED (2026-07-08)
 
 **THE SYSTEM IS BUILT AND VERIFIED at v2. All three apps done; §3/§4 below reflect v2.**
 v1 was built+verified 2026-07-07 (see Update log). On 2026-07-08 the user requested v2: (1) remove breaks entirely, (2) single context-aware Check-In/Check-Out button, (3) permanent QR (regenerate-only), (4) full modern redesign of both Flutter apps. Done via 3 parallel Agent subagents (one per app) against the updated `docs/API_CONTRACT.md` v2 + new `docs/DESIGN_SPEC.md`, then INDEPENDENTLY re-verified by the main agent.
@@ -86,6 +120,49 @@ Deploying to a Hostinger VPS. Facts:
 - **Planned per-subdomain nginx:** each subdomain serves its static bundle at root AND proxies `location /api/` → `http://127.0.0.1:5100/` → same-origin, no CORS. Recommended: `attendance.<domain>` = employee (build/staff), `admin.<domain>` = admin (build/admin).
 - **PENDING:** (Part 2) get the domain from user + DNS A records → nginx server blocks + certbot SSL; (Part 3) upload `build/admin` + `build/staff` to VPS `/var/www/...` (build on Mac + rsync, OR install Flutter on VPS and run `deploy-web.sh` there). Still waiting on the domain/subdomain names.
 
+## 2d. Branding (v3.1, 2026-07-27)
+
+Both front-ends were still shipping Flutter stock defaults ("attendance_admin", "A new Flutter project", Flutter-blue `#0175C2`, and the **same default Flutter logo in both apps**). Now branded:
+
+| | Employee app (`mobile_app/`) | Admin panel (`admin_panel/`) |
+|---|---|---|
+| Name | **NexCrew Attendance** | **NexCrew Admin** |
+| PWA short_name | NexCrew | NexCrew Admin |
+| theme_color / background | `#4F46E5` / `#4F46E5` | `#312E81` / `#0F172A` |
+| Icon gradient | `#6366F1 → #4338CA` | `#0F172A → #3730A3` |
+
+- **Icons are generated from code — never hand-edit the PNGs.** `tools/generate_icons.py` writes all **30** files (web favicon + 4 PWA icons per app, 5 Android mipmap densities, 15 iOS AppIcon slots). Usage is in its docstring; re-run it from the repo root after changing `PALETTES` / `RIDGES`.
+- Mark = fingerprint, deliberately matching `Icons.fingerprint` already used in-app (admin rail brand, login `_BrandMark`, QR kiosk). Both apps share the shape and differ only by gradient.
+- **Why a `small` glyph variant exists:** the 5-ridge fingerprint turns to mush below ~48px. Favicons (32px) and the tiny iOS slots (≤60px) use a 3-ridge, thicker-stroke version — same silhouette, legible small. Verified by eye at 32px.
+- Rasterising uses **headless Chrome + `sips`** because this Mac has no ImageMagick, Pillow, cairosvg or rsvg. Note Chrome's `--screenshot` **crops rather than scales** when the window is smaller than the SVG — so every size is downsampled from a 1024px master, never rendered directly. (Getting this wrong produced a zoomed corner instead of an icon.)
+- **Deliberately NOT renamed** (identifiers, not user-visible): Dart package names `attendance_admin` / `attendance_mobile` (used in `package:` imports across the tests), the admin token key `attendance_admin_token` (renaming logs everyone out), and Android `applicationId` `com.nexcrew.attendance_mobile` (**changing it makes an update install as a separate app**).
+- Known caveat: generated PNGs keep an alpha channel — fine for web/Android, but the App Store rejects alpha in iOS icons. Flatten before any iOS submission.
+- `deploy-web.sh both` was re-run, so `build/admin` and `build/staff` now carry the new branding.
+
+## 2e. Layout/design fixes (v3.2, 2026-07-27)
+
+User sent a screenshot of Office settings: *"very bad design… every screen"*. Root causes were **layout defects, not styling**:
+
+| Defect | Fix |
+|---|---|
+| Every input wrapped in `Expanded` → "09:00" in a 285pt box, timezone spanning 712pt | `SettingRow` (label left, control right, content-sized) + `FormRow` for paired dialog fields |
+| `Row` centres children, so a field with `helperText` beside one without floated out of line (visible on Radius, and identically in the employee dialog) | Both widgets force `crossAxisAlignment.start` |
+| Content sliced mid-glyph where the scroll clipped under the fixed header | `FadingScrollView`, applied by `PageScaffold` to **every** screen (`fadeScroll: false` to opt out) |
+| "Geofence preview" read `widget.initial`, so editing radius never moved it — a lying control | Bound to live controller values; ring scales logarithmically (10 m–2 km) |
+| Save buried at the bottom of a tall card | Pinned save bar, appears only when dirty, with Discard |
+| Dark mode: `outlineVariant` borders made fields dissolve; `SegmentedButton` unselected segment rendered white | `fieldBorder` (= `outline` @55% in dark) + explicit `segmentedButtonTheme`; **both apps** |
+| `formatMinutes` used for a duration → "A 9:00 working day" reads as a clock time | Explicit `9h 0m` |
+
+**⚠️ Two refactors that unblock testing — do not undo:**
+1. **`Routes` moved to `lib/router/routes.dart`**, import-free. It used to live in `app_router.dart`, which imports every screen, so any screen importing `Routes` transitively pulled in *all* of them.
+2. **`file_download.dart` is now a conditional-export facade** (`file_download_web.dart` / `file_download_stub.dart`). It imports `dart:js_interop`, which does not exist in the VM, so anything touching Employees/Reports was impossible to compile under `flutter test`.
+
+**Screenshot harness (`test/screenshots_test.dart`)** — renders screens to `test/goldens/*.png` with stubbed providers (admin providers have public mutable fields, so no network is needed):
+```bash
+cd admin_panel && flutter test --tags screenshots --update-goldens
+```
+Skipped by default via `dart_test.yaml`. Caveats: needs macOS system fonts; google_fonts cannot fetch Inter offline so the harness substitutes a system face (real theme otherwise) and logs noisy "unable to load font" errors — harmless. **Use this before claiming any UI work looks right** — six screens were verified this way, which is how the white segmented button and the clock-time duration were caught.
+
 ## 3. Critical data (credentials, config, defaults)
 
 Seeded by `cd backend && npm run seed` (idempotent, wipe-and-recreate DB `attendance_system`):
@@ -124,6 +201,10 @@ Seeded by `cd backend && npm run seed` (idempotent, wipe-and-recreate DB `attend
 9. **DB state is disposable in dev:** verifiers/smoke tests leave records behind (e.g. an ON_LEAVE manual entry for EMP-0002 on 2026-07-06 with note "smoke test"). `cd backend && npm run seed` wipes and recreates everything — run it before any demo. There is deliberately NO attendance-delete endpoint (corrections only, for auditability).
 10. Browsers can't read the xlsx `Content-Disposition` filename unless the backend adds `Access-Control-Expose-Headers: Content-Disposition`; admin panel falls back to sensible generated filenames — cosmetic, not a bug.
 11. **(v2) `google_fonts` (Inter) fetches the font at runtime on first launch** — needs network the first time; offline it falls back to a bundled font, so it never breaks `flutter test`/builds. Both Flutter apps use it via `lib/theme/app_theme.dart`. If you want fully offline/air-gapped, bundle the Inter .ttf and switch to a local `TextTheme`.
+13. **(v3) Admin sub-screens must NOT add their own page padding.** `LiveAttendanceScreen`, `AttendanceLogsScreen`, `MissingCheckoutsScreen`, `EmployeesScreen` and `CatalogScreen` are rendered *inside* `PageScaffold` (via `AttendanceScreen` / `PeopleScreen`), which supplies padding and the title. Each has a `// Page padding/title come from the enclosing PageScaffold.` comment where its old `Padding` wrapper was. Re-adding one double-pads the page.
+14. **(v3) `AttentionProvider` polls every 2 min and is started by the shell, stopped in `ShellScreen.dispose()`** (the shell only unmounts on logout) — otherwise its timer keeps firing 401s against a cleared token. A failed poll deliberately keeps the last known badge value rather than flashing a misleading 0.
+15. **(v3) The live board's status filter is client-side.** `GET /attendance/live` has no status parameter; `LiveAttendanceProvider.visibleRecords` filters the fetched rows. Read `visibleRecords`, not `data.records`, when rendering the table.
+16. **(v3) go_router + provider wiring:** `AuthProvider` is constructed in `_AdminAppState` (**above** the router) because the router both redirects on it and uses it as `refreshListenable`; it is then injected with `ChangeNotifierProvider.value`. Don't move it back into the `MultiProvider` create list — the router is built from it.
 12. **(v2) Shared design system lives in `docs/DESIGN_SPEC.md`** and is implemented identically in both apps under `lib/theme/` (`app_colors`, `app_spacing`, `app_theme`) + shared `lib/widgets/` components (AppCard, StatusChip, StatTile, AppButton, EmptyState/LoadingState/ErrorState, AppAvatar…). Seed color `#4F46E5`, Material 3, light+dark. Keep BOTH apps in sync if you change tokens.
 
 ## 5. How to run (quick reference)
@@ -149,8 +230,8 @@ Demo flow: admin panel → Office Settings (geofence) → QR Display page (kiosk
 ## 6. Architecture map (where things live)
 
 - `backend/src/`: `server.js` (entry, port-fallback logic) · `app.js` · `config/` · `models/` (User, Department, Designation, Attendance, OfficeSettings, AttendanceRequest, Document) · `middleware/` (auth, role guard, error handler, multer) · `controllers/` + `routes/` (one pair per resource) · `utils/` (qr crypto, haversine, time helpers, excel, envelope) · `seed/seed.js`. Uploads → `backend/uploads/` (10MB, pdf/jpg/jpeg/png).
-- `mobile_app/lib/`: `config/api_config.dart` · `models/` (null-tolerant fromJson, contract-shaped) · `services/api_client.dart` (Bearer inject via flutter_secure_storage, typed ApiException) + location service (full permission handling) · `providers/` (auth, attendance, profile/documents) · `screens/` (splash→login→home w/ ticking today card + 4 state-gated actions, scanner flow, history, monthly summary, requests, profile, documents). Tests: 18 model round-trip tests.
-- `admin_panel/lib/`: same layered shape; `services/file_download.dart` (web Blob save); screens = shell w/ NavigationRail → Dashboard (stat cards + fl_chart trends), Live Attendance (30s auto-refresh), Logs (+Correct dialog, +Manual entry), Requests (tabs), Missing Check-outs, Employees (CRUD + xlsx import/export), Departments/Designations, Office Settings, QR Display (auto-refresh kiosk), Reports (6 types + xlsx export).
+- `mobile_app/lib/`: `config/api_config.dart` · `models/` (null-tolerant fromJson, contract-shaped; **v3** `office_settings.dart`) · `services/` — `api_client.dart` (Bearer via flutter_secure_storage, typed ApiException), `location_service.dart`, **v3** `notification_service.dart` (daily reminders) + `pending_scan_service.dart` (unsent-scan recovery) · `providers/` (auth, attendance, documents, **v3** `presence_provider.dart`) · `widgets/` (+**v3** `attendance_success_sheet.dart`, shared by Home and the shell FAB) · `screens/`: splash→login→`home_shell` (Home · **Activity** · Requests · Profile + context-aware scan FAB) — `home_tab` (pending-scan card, presence strip, status card, hero button), `activity_tab` (hosts `HistoryView` + `SummaryView` as tabs), scanner, requests, profile (reminders toggle), documents. **Tests: 27** (`models_test.dart` 18 + `presence_test.dart` 9).
+- `admin_panel/lib/`: same layered shape; `services/file_download.dart` (web Blob save); **v3** `router/app_router.dart` (all routes + auth redirect), `providers/attention_provider.dart` (badge counts), `widgets/page_scaffold.dart` (page header + URL sub-tabs) + `widgets/skeleton.dart`. Screens: `shell_screen` (grouped rail, badges) wrapping → `dashboard_screen` (attention card + drill-down tiles + fl_chart trends), `attendance_screen` (tab host → live/logs/missing), `requests_screen`, `people_screen` (tab host → employees/catalog), `reports_screen`, `qr_display_screen`, `office_settings_screen`; `kiosk_screen` sits **outside** the shell.
 
 ## 7. User context & preferences
 
@@ -159,6 +240,12 @@ Demo flow: admin panel → Office Settings (geofence) → QR Display page (kiosk
 - Model/session note: user runs claude-fable-5; heavy multi-agent workflow was used for the initial build (ultracode was on for that turn, later off — default to normal tooling unless re-enabled).
 
 ## 8. Update log
+
+- **2026-07-27 (latest)** — **v3.2 LAYOUT FIXES.** User screenshotted Office settings: "very bad design… every screen". Diagnosed as layout defects rather than styling (see §2e): every input `Expanded` to absurd widths, `Row`s centring mismatched-height fields, scroll content sliced under the fixed header, a geofence "preview" bound to saved instead of edited values, save buried at the bottom, and two dark-mode theme bugs. Added `SettingRow`/`SettingsCard`, `FormRow`, `FadingScrollView`, `NumberField`; rebuilt `office_settings_screen.dart`; converted the employee + attendance-log dialogs to `FormRow`; themed `fieldBorder` and `segmentedButtonTheme` in **both** apps. Extracted `Routes` to `router/routes.dart` and made `file_download.dart` a conditional-export facade — both were blocking any widget test that touched a screen. Built a **screenshot harness** and used it to review six screens; it caught the white `SegmentedButton` and the "A 9:00 working day" copy bug that code review had missed. Verified: both apps analyze clean, admin 3/3 (+screenshots skipped) and mobile 27/27 tests, both web release builds OK, `deploy-web.sh both` re-run. **Not verified visually: the mobile app's screens** (harness is admin-only so far) and the admin dialogs/light mode.
+
+- **2026-07-27 (later)** — **v3.1 BRANDING.** User: "this both apps is web, app name, web name, icon, update everything." Both apps were still 100% Flutter stock (same default Flutter logo in both, "A new Flutter project", `#0175C2`). Named them **NexCrew Attendance** / **NexCrew Admin** across web `index.html` (title, description, `theme-color`, apple-touch title), both `manifest.json` (name/short_name/description/theme+background colors), Android `android:label`, iOS `CFBundleDisplayName`/`CFBundleName`, the mobile `MaterialApp.title`, and both pubspec descriptions. Wrote `tools/generate_icons.py` (fingerprint mark, per-app gradients, `small` variant for favicon legibility) and generated **30** icons across web/Android/iOS. Root README rebranded and de-staled (it still described breaks + a *rotating* QR, both gone since v2). Verified: both apps analyze clean, admin 3/3 + mobile 27/27 tests, both `flutter build web --release` OK, built `index.html`/`manifest.json` carry the new names, admin & staff favicons differ. `./deploy-web.sh both` re-run → `build/admin` + `build/staff` refreshed (clears the v3 "bundles are stale" follow-up). See §2d for what was deliberately NOT renamed.
+
+- **2026-07-27** — **v3 UX/IA REWORK SHIPPED.** User: "ui and workflow is bad… first analyse everything how can make it better." Analysis concluded the *visual* layer was already sound (v2 design system) and the real problems were IA + workflow; presented that honestly rather than restyling. User approved full scope (both apps) and both new deps. Delivered: admin `go_router` URL routing + `ShellRoute` (fixes no-back-button/no-deep-links/state-loss on a **web** app), nav 10 items → 5+2 with live badges, actionable dashboard ("Needs your attention" card + drill-down stat tiles + silent 60s refresh), `/kiosk` outside the shell, `PageScaffold`/skeleton polish; mobile geofence **pre-flight** before the camera opens, permission moved out of mid-scan, local check-out reminders (attacks the Missing-check-outs queue at source), History+Summary merged into **Activity**, context-aware scan FAB, history→correction link, and unsent-scan recovery via regularization (**deliberately not** a replay queue — see §2). Deps added: admin `go_router`; mobile `flutter_local_notifications` + `timezone` + `shared_preferences`, plus `POST_NOTIFICATIONS`/`RECEIVE_BOOT_COMPLETED` in AndroidManifest. **Backend + API_CONTRACT untouched.** Verified: both apps analyze clean, admin 3/3 tests + web release build, mobile 27/27 tests + web release build; client haversine confirmed byte-identical in behaviour to `backend/src/utils/geo.js`. Updated `docs/DESIGN_SPEC.md` (new "Navigation & information architecture" section + rewritten screen directions) and §2/§4/§6 here. New gotchas 13–16. **Still not done: real device/browser demo (now the top follow-up), and reminders do not work on the Flutter-web staff build (§2 item 2).**
 
 - **2026-07-07** — Project bootstrapped from `docs/PLAN.md`. Authored `docs/API_CONTRACT.md`; launched 3-builder workflow (`wf_ba04ad97-10a`). Backend build DONE (self-tested, port-5000/AirPlay workaround). Mobile build DONE + verification PASSED (0 analyze issues, 18/18 tests; geolocator pinned ^13, see Gotcha 2). Root README written. Stray root `build/` deleted. Created `agent_docs/` + this file.
 - **2026-07-07 (end of day)** — Workflow `wf_ba04ad97-10a` COMPLETED: **backend PASSED, mobile_app PASSED, admin_panel PASSED — all with 0 fix rounds, 0 open issues.** Backend verified end-to-end against live MongoDB (full contract, adversarial checks incl. stale-QR 403, geofence distance message, double check-in/out 409s, import/export round-trip with per-row errors, document ownership, byte-identical downloads). Admin panel: analyze clean, 3/3 tests, release web build succeeded, endpoint-by-endpoint contract match confirmed. Added §3 "interpretation choices" and Gotchas 9–10 from verifier findings. Status: system COMPLETE and verified; no processes left running; DB re-seeded pristine. Note: initial build turn ran with ultracode ON; it is now OFF — use normal single-agent tooling unless user re-enables.

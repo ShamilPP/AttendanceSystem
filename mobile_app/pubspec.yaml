@@ -1,5 +1,5 @@
 name: attendance_mobile
-description: "A new Flutter project."
+description: "NexCrew Attendance — employee check-in/out, history and requests."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -45,6 +45,11 @@ dependencies:
   path_provider: ^2.1.6
   http_parser: ^4.1.2
   google_fonts: ^8.1.0
+  # Local check-out reminders (no server push needed) + the timezone database
+  # they schedule against.
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.10.0
+  shared_preferences: ^2.5.5
 
 dev_dependencies:
   flutter_test:

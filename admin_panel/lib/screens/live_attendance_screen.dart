@@ -11,6 +11,7 @@ import '../providers/live_attendance_provider.dart';
 import '../utils/formats.dart';
 import '../widgets/app_avatar.dart';
 import '../widgets/app_card.dart';
+import '../widgets/skeleton.dart';
 import '../widgets/states.dart';
 import '../widgets/status_chip.dart';
 import '../widgets/table_wrapper.dart';
@@ -54,9 +55,8 @@ class _LiveAttendanceScreenState extends State<LiveAttendanceScreen> {
     final data = provider.data;
     final theme = Theme.of(context);
 
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: Column(
+    // Page padding/title come from the enclosing PageScaffold.
+    return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -77,6 +77,17 @@ class _LiveAttendanceScreenState extends State<LiveAttendanceScreen> {
                   onChanged: (value) => provider.setDepartment(value),
                 ),
               ),
+              if (provider.statusFilter != null) ...[
+                const SizedBox(width: AppSpacing.md),
+                InputChip(
+                  avatar: Icon(Icons.filter_alt,
+                      size: 16,
+                      color: AppColors.forLiveStatus(provider.statusFilter!)),
+                  label: Text(
+                      'Showing ${StatusChip.liveLabel(provider.statusFilter!)}'),
+                  onDeleted: () => provider.setStatusFilter(null),
+                ),
+              ],
               const Spacer(),
               if (provider.lastUpdated != null)
                 Row(
@@ -108,6 +119,8 @@ class _LiveAttendanceScreenState extends State<LiveAttendanceScreen> {
             ErrorBanner(
                 message: provider.error!, onRetry: () => provider.fetch()),
           if (data != null) ...[
+            // Each chip is also the filter for its own slice — clicking
+            // "Absent 4" should show those four, not just report the number.
             Wrap(
               spacing: AppSpacing.md,
               runSpacing: AppSpacing.md,
@@ -116,44 +129,64 @@ class _LiveAttendanceScreenState extends State<LiveAttendanceScreen> {
                     label: 'Total',
                     count: data.summary.total,
                     color: AppColors.seed,
-                    icon: Icons.groups_outlined),
+                    icon: Icons.groups_outlined,
+                    selected: provider.statusFilter == null,
+                    onTap: () => provider.setStatusFilter(null)),
                 CountChip(
-                    label: 'Present',
+                    label: 'Working',
                     count: data.summary.present,
                     color: AppColors.present,
-                    icon: Icons.check_circle_outline),
+                    icon: Icons.check_circle_outline,
+                    selected: provider.statusFilter == 'WORKING',
+                    onTap: () => provider.setStatusFilter('WORKING')),
                 CountChip(
                     label: 'Late',
                     count: data.summary.late,
                     color: AppColors.late,
                     icon: Icons.schedule),
                 CountChip(
-                    label: 'Absent',
+                    label: 'Not in',
                     count: data.summary.absent,
                     color: AppColors.absent,
-                    icon: Icons.highlight_off),
+                    icon: Icons.highlight_off,
+                    selected: provider.statusFilter == 'NOT_IN',
+                    onTap: () => provider.setStatusFilter('NOT_IN')),
                 CountChip(
                     label: 'On leave',
                     count: data.summary.onLeave,
                     color: AppColors.onLeave,
-                    icon: Icons.event_busy_outlined),
+                    icon: Icons.event_busy_outlined,
+                    selected: provider.statusFilter == 'ON_LEAVE',
+                    onTap: () => provider.setStatusFilter('ON_LEAVE')),
                 CountChip(
                     label: 'Checked out',
                     count: data.summary.checkedOut,
                     color: AppColors.checkedOut,
-                    icon: Icons.logout),
+                    icon: Icons.logout,
+                    selected: provider.statusFilter == 'CHECKED_OUT',
+                    onTap: () => provider.setStatusFilter('CHECKED_OUT')),
               ],
             ),
             const SizedBox(height: AppSpacing.lg),
           ],
           Expanded(
             child: provider.loading && data == null
-                ? const LoadingState(message: 'Loading live board…')
-                : data == null || data.records.isEmpty
-                    ? const EmptyState(
+                ? const TableSkeleton(columns: 6)
+                : data == null || provider.visibleRecords.isEmpty
+                    ? EmptyState(
                         title: 'Nobody to show',
-                        message: 'No active employees match this filter.',
-                        icon: Icons.sensors_off)
+                        message: provider.statusFilter == null
+                            ? 'No active employees match this filter.'
+                            : 'Nobody is currently '
+                                '"${StatusChip.liveLabel(provider.statusFilter!)}".',
+                        icon: Icons.sensors_off,
+                        actionLabel: provider.statusFilter == null
+                            ? null
+                            : 'Show everyone',
+                        onAction: provider.statusFilter == null
+                            ? null
+                            : () => provider.setStatusFilter(null),
+                      )
                     : AppCard(
                         padding: EdgeInsets.zero,
                         child: ClipRRect(
@@ -169,7 +202,7 @@ class _LiveAttendanceScreenState extends State<LiveAttendanceScreen> {
                                 DataColumn(label: Text('Status')),
                               ],
                               rows: [
-                                for (final r in data.records)
+                                for (final r in provider.visibleRecords)
                                   DataRow(cells: [
                                     DataCell(EmployeeCell(
                                       name: r.employee.name,
@@ -193,7 +226,6 @@ class _LiveAttendanceScreenState extends State<LiveAttendanceScreen> {
                       ),
           ),
         ],
-      ),
     );
   }
 }

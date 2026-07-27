@@ -11,6 +11,7 @@ import '../widgets/app_button.dart';
 import '../widgets/app_card.dart';
 import '../widgets/app_feedback.dart';
 import '../widgets/picker_fields.dart';
+import '../widgets/skeleton.dart';
 import '../widgets/states.dart';
 import '../widgets/status_chip.dart';
 import '../widgets/table_wrapper.dart';
@@ -48,9 +49,8 @@ class _MissingCheckoutsScreenState extends State<MissingCheckoutsScreen> {
     final provider = context.watch<MissingCheckoutsProvider>();
     final theme = Theme.of(context);
 
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: Column(
+    // Page padding/title come from the enclosing PageScaffold.
+    return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -87,7 +87,7 @@ class _MissingCheckoutsScreenState extends State<MissingCheckoutsScreen> {
                 message: provider.error!, onRetry: () => provider.fetch()),
           Expanded(
             child: provider.loading
-                ? const LoadingState()
+                ? const TableSkeleton(rows: 5)
                 : provider.records.isEmpty
                     ? const EmptyState(
                         title: 'All clear',
@@ -132,7 +132,6 @@ class _MissingCheckoutsScreenState extends State<MissingCheckoutsScreen> {
                       ),
           ),
         ],
-      ),
     );
   }
 }

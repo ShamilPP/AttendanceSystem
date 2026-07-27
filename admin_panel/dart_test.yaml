@@ -1,0 +1,9 @@
+# The screenshot suite is a design review tool, not a pass/fail test: it
+# renders screens to test/goldens/*.png so layout can be inspected without a
+# running backend. It is skipped by default because it needs macOS system
+# fonts and always emits google_fonts "cannot fetch Inter offline" noise.
+#
+#   flutter test --tags screenshots --update-goldens
+tags:
+  screenshots:
+    skip: "design-review only — run with: flutter test --tags screenshots --update-goldens"

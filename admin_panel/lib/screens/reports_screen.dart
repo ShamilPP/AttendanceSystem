@@ -12,6 +12,8 @@ import '../widgets/app_button.dart';
 import '../widgets/app_card.dart';
 import '../widgets/app_feedback.dart';
 import '../widgets/picker_fields.dart';
+import '../widgets/page_scaffold.dart';
+import '../widgets/skeleton.dart';
 import '../widgets/states.dart';
 import '../widgets/table_wrapper.dart';
 
@@ -61,8 +63,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final catalog = context.watch<CatalogProvider>();
     final theme = Theme.of(context);
 
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.xl),
+    return PageScaffold(
+      title: 'Reports',
+      description:
+          'Build a report, review it here, then export the same query to Excel.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -177,7 +181,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ErrorBanner(message: provider.error!, onRetry: () => provider.run()),
           Expanded(
             child: provider.loading
-                ? const LoadingState(message: 'Running report…')
+                ? const TableSkeleton(columns: 6)
                 : !provider.hasRun
                     ? const EmptyState(
                         title: 'Build a report',

@@ -1,11 +1,11 @@
 {
-    "name": "attendance_mobile",
-    "short_name": "attendance_mobile",
+    "name": "NexCrew Attendance",
+    "short_name": "NexCrew",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#4F46E5",
+    "theme_color": "#4F46E5",
+    "description": "Scan the office QR to check in and out, and track your attendance, hours and requests.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

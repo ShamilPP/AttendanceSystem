@@ -17,7 +17,7 @@ class ApiConfig {
   static const String _override = String.fromEnvironment('API_BASE_URL');
 
   static String get baseUrl =>
-      _override.isNotEmpty ? _override : 'http://localhost:5000/api/v1';
+      _override.isNotEmpty ? _override : 'https://attendance-api.nexserve.tech/api/v1';
 
   /// Default request timeout for normal JSON calls.
   static const Duration requestTimeout = Duration(seconds: 30);

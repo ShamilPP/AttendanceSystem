@@ -42,6 +42,13 @@ abstract final class AppTheme {
       displayColor: scheme.onSurface,
     );
 
+    // `outlineVariant` is very dim on a dark surface — fields drawn with it
+    // dissolve into the background and stop reading as inputs. Dark mode
+    // borrows the brighter `outline` at partial opacity instead.
+    final fieldBorder = isDark
+        ? scheme.outline.withValues(alpha: 0.55)
+        : scheme.outlineVariant;
+
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
@@ -80,11 +87,11 @@ abstract final class AppTheme {
             const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         border: OutlineInputBorder(
           borderRadius: AppRadius.fieldR,
-          borderSide: BorderSide(color: scheme.outlineVariant),
+          borderSide: BorderSide(color: fieldBorder),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: AppRadius.fieldR,
-          borderSide: BorderSide(color: scheme.outlineVariant),
+          borderSide: BorderSide(color: fieldBorder),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: AppRadius.fieldR,

@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 import '../providers/attendance_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/documents_provider.dart';
+import '../providers/presence_provider.dart';
 import '../services/api_client.dart';
+import '../services/notification_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../widgets/app_avatar.dart';
@@ -49,7 +51,11 @@ class ProfileTab extends StatelessWidget {
 
     context.read<AttendanceProvider>().reset();
     context.read<DocumentsProvider>().reset();
-    await context.read<AuthProvider>().logout();
+    context.read<PresenceProvider>().reset();
+    final auth = context.read<AuthProvider>();
+    // Reminders belong to the person who signed in, not to the device.
+    await NotificationService.instance.setRemindersEnabled(false);
+    await auth.logout();
     if (!context.mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
@@ -162,6 +168,8 @@ class ProfileTab extends StatelessWidget {
                     ),
                   ]),
                   const SizedBox(height: AppSpacing.lg),
+                  const _RemindersCard(),
+                  const SizedBox(height: AppSpacing.lg),
                   Card(
                     child: Column(
                       children: [
@@ -208,6 +216,144 @@ class ProfileTab extends StatelessWidget {
                 ],
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Daily check-in / check-out reminder toggle.
+///
+/// This is the fix for the single most expensive workflow gap in the system:
+/// people forget to check out, and the admin panel grew a whole "Missing
+/// check-outs" queue to clean up after them. A local notification a few
+/// minutes after the working day ends removes most of that queue at source.
+///
+/// Reminder times come from office settings, so they follow the configured
+/// working day rather than a hard-coded hour.
+class _RemindersCard extends StatefulWidget {
+  const _RemindersCard();
+
+  @override
+  State<_RemindersCard> createState() => _RemindersCardState();
+}
+
+class _RemindersCardState extends State<_RemindersCard> {
+  bool _enabled = false;
+  bool _busy = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final enabled = await NotificationService.instance.remindersEnabled();
+    if (mounted) {
+      setState(() {
+        _enabled = enabled;
+        _busy = false;
+      });
+    }
+  }
+
+  Future<void> _toggle(bool value) async {
+    setState(() => _busy = true);
+
+    if (!value) {
+      await NotificationService.instance.setRemindersEnabled(false);
+      if (mounted) setState(() { _enabled = false; _busy = false; });
+      return;
+    }
+
+    // Permission is only ever requested here — at the moment the employee
+    // asks for reminders, where the ask makes sense and gets a yes.
+    final granted = await NotificationService.instance.requestPermission();
+    if (!granted) {
+      if (mounted) {
+        setState(() => _busy = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Notifications are blocked. Enable them for this app in your '
+                'device settings to get reminders.'),
+          ),
+        );
+      }
+      return;
+    }
+
+    await NotificationService.instance.setRemindersEnabled(true);
+    if (!mounted) return;
+
+    // Office settings drive the schedule; fall back to a standard day if
+    // they have not been fetched yet.
+    final office = context.read<PresenceProvider>().office;
+    await NotificationService.instance.scheduleDailyReminders(
+      workStart: office?.workStartTime ?? '09:00',
+      workEnd: office?.workEndTime ?? '18:00',
+    );
+    if (mounted) setState(() { _enabled = true; _busy = false; });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final office = context.watch<PresenceProvider>().office;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: AppColors.tint),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.notifications_active_outlined,
+                  color: AppColors.warning),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Daily reminders',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  Text(
+                    office == null
+                        ? 'Get nudged to check in and out so no day is left open.'
+                        : 'A nudge before ${office.workStartTime} and after '
+                            '${office.workEndTime}, so no day is left open.',
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            if (_busy)
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2.4),
+              )
+            else
+              Switch(value: _enabled, onChanged: _toggle),
           ],
         ),
       ),

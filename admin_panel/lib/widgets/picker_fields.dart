@@ -63,14 +63,16 @@ class DatePickerField extends StatelessWidget {
 class TimePickerField extends StatelessWidget {
   const TimePickerField({
     super.key,
-    required this.label,
+    this.label,
     required this.value,
     required this.onChanged,
     this.allowClear = false,
     this.enabled = true,
   });
 
-  final String label;
+  /// Omit when the field already sits next to its own label (e.g. a
+  /// `SettingRow`), so no empty label gutter is reserved above the value.
+  final String? label;
   final TimeOfDay? value;
   final ValueChanged<TimeOfDay?> onChanged;
   final bool allowClear;
@@ -91,7 +93,7 @@ class TimePickerField extends StatelessWidget {
       borderRadius: BorderRadius.circular(6),
       child: InputDecorator(
         decoration: InputDecoration(
-          labelText: label,
+          labelText: (label == null || label!.isEmpty) ? null : label,
           border: const OutlineInputBorder(),
           isDense: true,
           enabled: enabled,

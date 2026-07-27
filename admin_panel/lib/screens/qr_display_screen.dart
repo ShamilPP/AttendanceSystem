@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../models/qr_info.dart';
+import '../router/routes.dart';
 import '../services/api_client.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
@@ -10,13 +12,20 @@ import '../widgets/app_button.dart';
 import '../widgets/app_feedback.dart';
 import '../widgets/states.dart';
 
-/// Kiosk page for the **permanent** attendance QR.
+/// The **permanent** attendance QR.
 ///
 /// Fetches `GET /qr/current` once and renders `qrData` as a stable QR image —
 /// no countdown, no auto-refresh. An admin can explicitly **Regenerate** the
 /// code (`POST /qr/regenerate`), which mints a new one and invalidates the old.
+///
+/// In [kiosk] mode (the `/kiosk` route) the QR is rendered as large as the
+/// display allows and the destructive Regenerate action is hidden — this is
+/// the mode meant to be left running on a screen at the office entrance,
+/// where a stray click must never invalidate everyone's code.
 class QrDisplayScreen extends StatefulWidget {
-  const QrDisplayScreen({super.key});
+  const QrDisplayScreen({super.key, this.kiosk = false});
+
+  final bool kiosk;
 
   @override
   State<QrDisplayScreen> createState() => _QrDisplayScreenState();
@@ -120,6 +129,7 @@ class _QrDisplayScreenState extends State<QrDisplayScreen> {
                     )
                   : _QrContent(
                       info: _info!,
+                      kiosk: widget.kiosk,
                       regenerating: _regenerating,
                       onRegenerate: _regenerate,
                     ),
@@ -132,17 +142,25 @@ class _QrDisplayScreenState extends State<QrDisplayScreen> {
 class _QrContent extends StatelessWidget {
   const _QrContent({
     required this.info,
+    required this.kiosk,
     required this.regenerating,
     required this.onRegenerate,
   });
 
   final QrInfo info;
+  final bool kiosk;
   final bool regenerating;
   final VoidCallback onRegenerate;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Fill the display in kiosk mode so the code stays scannable from across
+    // the lobby; stay compact inside the admin shell.
+    final size = MediaQuery.of(context).size;
+    final qrSize = kiosk
+        ? (size.shortestSide * 0.52).clamp(280.0, 620.0)
+        : 340.0;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -193,7 +211,7 @@ class _QrContent extends StatelessWidget {
           child: QrImageView(
             data: info.qrData,
             version: QrVersions.auto,
-            size: 340,
+            size: qrSize,
             backgroundColor: Colors.white,
             eyeStyle: const QrEyeStyle(
               eyeShape: QrEyeShape.square,
@@ -226,23 +244,46 @@ class _QrContent extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.xxl),
-        AppButton(
-          label: 'Regenerate QR',
-          icon: Icons.autorenew,
-          loading: regenerating,
-          onPressed: onRegenerate,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Text(
-            'Regenerating invalidates the current code immediately. '
-            'Only do this if the code was leaked or you are reprinting it.',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            textAlign: TextAlign.center,
+        if (kiosk)
+          // Kiosk mode is display-only: the one action is leaving it.
+          AppButton.outline(
+            label: 'Exit kiosk',
+            icon: Icons.close_fullscreen,
+            onPressed: () => context.go(Routes.qr),
+          )
+        else ...[
+          Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.sm,
+            alignment: WrapAlignment.center,
+            children: [
+              AppButton.outline(
+                label: 'Open kiosk view',
+                icon: Icons.open_in_full,
+                onPressed: () => context.go(Routes.kiosk),
+              ),
+              AppButton(
+                label: 'Regenerate QR',
+                icon: Icons.autorenew,
+                loading: regenerating,
+                onPressed: onRegenerate,
+              ),
+            ],
           ),
-        ),
+          const SizedBox(height: AppSpacing.sm),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Text(
+              'Kiosk view fills the screen and hides every admin control — '
+              'leave it running on a display at the entrance. Regenerating '
+              'invalidates the current code immediately; only do this if the '
+              'code was leaked or you are reprinting it.',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
       ],
     );
   }

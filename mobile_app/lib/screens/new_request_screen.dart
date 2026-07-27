@@ -11,7 +11,26 @@ import '../widgets/app_text_field.dart';
 
 /// Form for a new attendance-regularization request.
 class NewRequestScreen extends StatefulWidget {
-  const NewRequestScreen({super.key});
+  const NewRequestScreen({
+    super.key,
+    this.initialDate,
+    this.initialType,
+    this.initialCheckIn,
+    this.initialCheckOut,
+  });
+
+  /// Pre-selects the day being corrected — set when the form is opened from a
+  /// history record, so the employee never retypes a date they just tapped.
+  final DateTime? initialDate;
+
+  /// Pre-selects the request type.
+  final String? initialType;
+
+  /// Pre-fills the requested times. Used when recovering a scan that never
+  /// reached the server: the moment they actually scanned is the moment that
+  /// should be recorded, not whenever the form is finally submitted.
+  final DateTime? initialCheckIn;
+  final DateTime? initialCheckOut;
 
   @override
   State<NewRequestScreen> createState() => _NewRequestScreenState();
@@ -21,10 +40,14 @@ class _NewRequestScreenState extends State<NewRequestScreen> {
   final _formKey = GlobalKey<FormState>();
   final _reasonController = TextEditingController();
 
-  DateTime _date = DateTime.now();
-  String _type = AttendanceRequestType.missedCheckIn;
-  TimeOfDay? _checkInTime;
-  TimeOfDay? _checkOutTime;
+  late DateTime _date = widget.initialDate ?? DateTime.now();
+  late String _type = widget.initialType ?? AttendanceRequestType.missedCheckIn;
+  late TimeOfDay? _checkInTime = widget.initialCheckIn == null
+      ? null
+      : TimeOfDay.fromDateTime(widget.initialCheckIn!);
+  late TimeOfDay? _checkOutTime = widget.initialCheckOut == null
+      ? null
+      : TimeOfDay.fromDateTime(widget.initialCheckOut!);
   bool _busy = false;
   String? _serverError;
 

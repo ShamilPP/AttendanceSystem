@@ -5,6 +5,10 @@ import 'app_card.dart';
 
 /// Dashboard KPI tile: an accented icon chip, a large tabular value and a label
 /// with an optional supporting line. The value fades/slides when it changes.
+///
+/// When [onTap] is set the tile becomes a link into the list behind the
+/// number — a count on its own only tells an admin *how many*, and the next
+/// question is always *who*.
 class StatTile extends StatelessWidget {
   const StatTile({
     super.key,
@@ -13,6 +17,8 @@ class StatTile extends StatelessWidget {
     required this.value,
     required this.accentColor,
     this.subtitle,
+    this.onTap,
+    this.hint,
   });
 
   final IconData icon;
@@ -21,11 +27,18 @@ class StatTile extends StatelessWidget {
   final Color accentColor;
   final String? subtitle;
 
+  /// Drill-down target. Null leaves the tile as a plain read-out.
+  final VoidCallback? onTap;
+
+  /// Short call-to-action shown in place of [subtitle] on a tappable tile.
+  final String? hint;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return AppCard(
       elevated: true,
+      onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -42,12 +55,16 @@ class StatTile extends StatelessWidget {
                 child: Icon(icon, color: accentColor, size: 22),
               ),
               const Spacer(),
-              Container(
-                width: 8,
-                height: 8,
-                decoration:
-                    BoxDecoration(color: accentColor, shape: BoxShape.circle),
-              ),
+              if (onTap != null)
+                Icon(Icons.arrow_outward,
+                    size: 16, color: theme.colorScheme.onSurfaceVariant)
+              else
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration:
+                      BoxDecoration(color: accentColor, shape: BoxShape.circle),
+                ),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -85,6 +102,14 @@ class StatTile extends StatelessWidget {
               subtitle!,
               style: theme.textTheme.labelSmall
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            )
+          else if (hint != null && onTap != null)
+            Text(
+              hint!,
+              style: theme.textTheme.labelSmall?.copyWith(
+                  color: accentColor, fontWeight: FontWeight.w700),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),

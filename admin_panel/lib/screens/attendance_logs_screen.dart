@@ -13,8 +13,10 @@ import '../widgets/app_button.dart';
 import '../widgets/app_card.dart';
 import '../widgets/app_feedback.dart';
 import '../widgets/employee_autocomplete.dart';
+import '../widgets/form_row.dart';
 import '../widgets/pagination_bar.dart';
 import '../widgets/picker_fields.dart';
+import '../widgets/skeleton.dart';
 import '../widgets/states.dart';
 import '../widgets/status_chip.dart';
 import '../widgets/table_wrapper.dart';
@@ -70,9 +72,8 @@ class _AttendanceLogsScreenState extends State<AttendanceLogsScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<AttendanceLogsProvider>();
 
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: Column(
+    // Page padding/title come from the enclosing PageScaffold.
+    return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AppCard(
@@ -167,7 +168,7 @@ class _AttendanceLogsScreenState extends State<AttendanceLogsScreen> {
                 message: provider.error!, onRetry: () => provider.fetch()),
           Expanded(
             child: provider.loading
-                ? const LoadingState(message: 'Loading records…')
+                ? const TableSkeleton(columns: 6)
                 : provider.records.isEmpty
                     ? const EmptyState(
                         title: 'No records found',
@@ -223,7 +224,6 @@ class _AttendanceLogsScreenState extends State<AttendanceLogsScreen> {
             onPageChanged: (page) => provider.fetch(toPage: page),
           ),
         ],
-      ),
     );
   }
 }
@@ -372,24 +372,19 @@ class _CorrectDialogState extends State<_CorrectDialog> {
                     ?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: AppSpacing.lg),
-              Row(children: [
-                Expanded(
-                  child: TimePickerField(
+              FormRow(children: [
+                TimePickerField(
                     label: 'Check-in',
                     value: _checkIn,
                     allowClear: true,
                     onChanged: (t) => setState(() => _checkIn = t),
                   ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: TimePickerField(
+                TimePickerField(
                     label: 'Check-out',
                     value: _checkOut,
                     allowClear: true,
                     onChanged: (t) => setState(() => _checkOut = t),
                   ),
-                ),
               ]),
               const SizedBox(height: AppSpacing.lg),
               DropdownButtonFormField<String>(
@@ -518,18 +513,14 @@ class _ManualEntryDialogState extends State<_ManualEntryDialog> {
                 onSelected: (u) => setState(() => _employee = u),
               ),
               const SizedBox(height: AppSpacing.lg),
-              Row(children: [
-                Expanded(
-                  child: DatePickerField(
+              FormRow(children: [
+                DatePickerField(
                     label: 'Date',
                     value: _date,
                     lastDate: DateTime.now(),
                     onChanged: (d) => setState(() => _date = d ?? _date),
                   ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: DropdownButtonFormField<String>(
+                DropdownButtonFormField<String>(
                     initialValue: _status,
                     decoration: const InputDecoration(labelText: 'Status'),
                     items: [
@@ -539,29 +530,23 @@ class _ManualEntryDialogState extends State<_ManualEntryDialog> {
                     ],
                     onChanged: (s) => setState(() => _status = s ?? _status),
                   ),
-                ),
               ]),
               const SizedBox(height: AppSpacing.lg),
-              Row(children: [
-                Expanded(
-                  child: TimePickerField(
+              FormRow(children: [
+                TimePickerField(
                     label: 'Check-in',
                     value: _timesDisabled ? null : _checkIn,
                     enabled: !_timesDisabled,
                     allowClear: true,
                     onChanged: (t) => setState(() => _checkIn = t),
                   ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: TimePickerField(
+                TimePickerField(
                     label: 'Check-out (optional)',
                     value: _timesDisabled ? null : _checkOut,
                     enabled: !_timesDisabled,
                     allowClear: true,
                     onChanged: (t) => setState(() => _checkOut = t),
                   ),
-                ),
               ]),
               if (_timesDisabled)
                 Padding(

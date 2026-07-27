@@ -6,6 +6,7 @@ import '../models/attendance.dart';
 import '../providers/attendance_provider.dart';
 import '../services/api_client.dart';
 import '../services/location_service.dart';
+import '../services/pending_scan_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../widgets/app_button.dart';
@@ -84,8 +85,23 @@ class _ScanScreenState extends State<ScanScreen> {
       if (!mounted) return;
       await _showErrorSheet(e.message, canOpenSettings: e.canOpenSettings);
     } on ApiException catch (e) {
+      // statusCode 0 means the request never reached the server, so the scan
+      // itself was fine — the network was not. Remember it so the employee
+      // can turn it into a correction request instead of losing the day.
+      // Anything else is a real verdict (bad QR, geofence, wrong state).
+      if (e.statusCode == 0) {
+        await PendingScanService.instance.save(PendingScan(
+          action: widget.action.apiValue,
+          attemptedAt: DateTime.now(),
+        ));
+      }
       if (!mounted) return;
-      await _showErrorSheet(e.message);
+      await _showErrorSheet(
+        e.statusCode == 0
+            ? '${e.message}\n\nWe saved this scan attempt — open the app once '
+                'you are back online to send it for approval.'
+            : e.message,
+      );
     }
   }
 

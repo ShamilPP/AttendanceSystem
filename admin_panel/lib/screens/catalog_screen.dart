@@ -31,9 +31,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<CatalogProvider>();
 
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: Column(
+    // Page padding/title come from the enclosing PageScaffold.
+    return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (provider.error != null)
@@ -80,7 +79,6 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   }),
           ),
         ],
-      ),
     );
   }
 }

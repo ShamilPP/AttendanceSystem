@@ -6,18 +6,25 @@ import '../providers/attendance_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../utils/formatters.dart';
+import '../widgets/app_button.dart';
 import '../widgets/async_states.dart';
 import '../widgets/status_chip.dart';
+import 'new_request_screen.dart';
 
 /// Paginated attendance history with a date-range filter and day cards.
-class HistoryTab extends StatefulWidget {
-  const HistoryTab({super.key});
+///
+/// Every day card opens a detail sheet that offers **Request a correction**
+/// pre-filled with that date. Previously an employee who spotted a wrong day
+/// had to work out on their own that the fix lived under Requests, then
+/// re-enter the date by hand.
+class HistoryView extends StatefulWidget {
+  const HistoryView({super.key});
 
   @override
-  State<HistoryTab> createState() => _HistoryTabState();
+  State<HistoryView> createState() => _HistoryViewState();
 }
 
-class _HistoryTabState extends State<HistoryTab> {
+class _HistoryViewState extends State<HistoryView> {
   final ScrollController _scrollController = ScrollController();
 
   @override
@@ -64,13 +71,27 @@ class _HistoryTabState extends State<HistoryTab> {
     await provider.setHistoryRange(picked.start, picked.end);
   }
 
-  void _showDetail(Attendance record) {
-    showModalBottomSheet<void>(
+  Future<void> _showDetail(Attendance record) async {
+    final wantsCorrection = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       builder: (sheetContext) => _AttendanceDetailSheet(record: record),
     );
+    if (wantsCorrection != true || !mounted) return;
+    // Jump straight into the request form with this day already selected.
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => NewRequestScreen(initialDate: _parseDay(record.date)),
+      ),
+    );
+    if (created == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Correction request submitted.')),
+      );
+    }
   }
+
+  static DateTime? _parseDay(String isoDay) => DateTime.tryParse(isoDay);
 
   @override
   Widget build(BuildContext context) {
@@ -130,30 +151,17 @@ class _HistoryTabState extends State<HistoryTab> {
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('History'),
-        actions: [
-          if (provider.historyFiltered)
-            IconButton(
-              tooltip: 'Clear filter',
-              onPressed: () => provider.setHistoryRange(null, null),
-              icon: const Icon(Icons.filter_alt_off_rounded),
-            ),
-        ],
-      ),
-      body: Column(
-        children: [
-          _FilterBar(
-            filtered: provider.historyFiltered,
-            from: provider.historyFrom,
-            to: provider.historyTo,
-            onPick: _pickRange,
-            onClear: () => provider.setHistoryRange(null, null),
-          ),
-          Expanded(child: body),
-        ],
-      ),
+    return Column(
+      children: [
+        _FilterBar(
+          filtered: provider.historyFiltered,
+          from: provider.historyFrom,
+          to: provider.historyTo,
+          onPick: _pickRange,
+          onClear: () => provider.setHistoryRange(null, null),
+        ),
+        Expanded(child: body),
+      ],
     );
   }
 }
@@ -441,6 +449,23 @@ class _AttendanceDetailSheet extends StatelessWidget {
                 ),
               ),
             ],
+            const SizedBox(height: AppSpacing.xl),
+            // The fix lives right where the problem is noticed.
+            AppButton(
+              label: 'Request a correction',
+              icon: Icons.edit_calendar_rounded,
+              variant: AppButtonVariant.tonal,
+              onPressed: () => Navigator.of(context).pop(true),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Wrong times or a missing scan? Send this day to your admin for review.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: scheme.onSurfaceVariant),
+            ),
           ],
         ),
       ),

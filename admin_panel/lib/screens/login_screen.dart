@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
@@ -9,7 +10,11 @@ import '../widgets/app_text_field.dart';
 
 /// Admin sign-in. Non-admin accounts are rejected with a clear message.
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.from});
+
+  /// The location the admin was trying to reach before being bounced here
+  /// (e.g. a bookmarked `/reports`). Restored after a successful sign-in.
+  final String? from;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -30,10 +35,15 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    await context.read<AuthProvider>().login(
+    final ok = await context.read<AuthProvider>().login(
           _emailController.text.trim(),
           _passwordController.text,
         );
+    // The router's redirect already sends an authenticated admin to the
+    // overview; this hop restores a deep link they arrived with instead.
+    if (ok && mounted && widget.from != null && widget.from!.isNotEmpty) {
+      context.go(widget.from!);
+    }
   }
 
   @override

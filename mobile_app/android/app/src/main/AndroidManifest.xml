@@ -6,8 +6,13 @@
     <!-- GPS geofence verification on attendance scans -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <!-- Daily check-in/check-out reminders (Android 13+ runtime permission).
+         Requested only when the employee turns reminders on in Profile. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Re-schedules the daily reminders after a device restart. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <application
-        android:label="Attendance"
+        android:label="NexCrew Attendance"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">

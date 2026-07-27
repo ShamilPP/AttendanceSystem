@@ -17,7 +17,7 @@ class StatusChip extends StatelessWidget {
   /// Live status: NOT_IN | WORKING | CHECKED_OUT | ON_LEAVE.
   factory StatusChip.live(String status, {Key? key}) => StatusChip(
         key: key,
-        label: _liveLabel(status),
+        label: liveLabel(status),
         color: AppColors.forLiveStatus(status),
       );
 
@@ -48,7 +48,9 @@ class StatusChip extends StatelessWidget {
     }
   }
 
-  static String _liveLabel(String status) {
+  /// Human label for a live status — public so filter chips elsewhere can
+  /// name the status they are filtering by using the same wording.
+  static String liveLabel(String status) {
     switch (status) {
       case 'NOT_IN':
         return 'Not in';
@@ -111,6 +113,10 @@ class StatusChip extends StatelessWidget {
 }
 
 /// Count chip used in summary rows (live board, requests header, import result).
+///
+/// With [onTap] it doubles as a filter toggle: the summary row above a table
+/// is exactly where an admin expects to click a number to see the rows it
+/// counts. [selected] draws the active state.
 class CountChip extends StatelessWidget {
   const CountChip({
     super.key,
@@ -118,23 +124,35 @@ class CountChip extends StatelessWidget {
     required this.count,
     required this.color,
     this.icon,
+    this.onTap,
+    this.selected = false,
   });
 
   final String label;
   final int count;
   final Color color;
   final IconData? icon;
+  final VoidCallback? onTap;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
+    final isDark = brightness == Brightness.dark;
     final fg = AppColors.onTint(color, brightness);
-    return Container(
+    final fill = selected
+        ? color.withValues(alpha: isDark ? 0.30 : 0.20)
+        : color.withValues(alpha: isDark ? 0.16 : 0.10);
+
+    final content = Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: brightness == Brightness.dark ? 0.16 : 0.10),
+        color: fill,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.28)),
+        border: Border.all(
+          color: color.withValues(alpha: selected ? 0.75 : 0.28),
+          width: selected ? 1.6 : 1,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -162,6 +180,20 @@ class CountChip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+
+    if (onTap == null) return content;
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: onTap,
+          child: content,
+        ),
       ),
     );
   }

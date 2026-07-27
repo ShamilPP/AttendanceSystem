@@ -12,14 +12,18 @@ import '../widgets/stat_tile.dart';
 
 /// Monthly attendance summary: month picker, a present/absent chart and a
 /// grid of stat tiles (no break tile — v2 has no break tracking).
-class SummaryScreen extends StatefulWidget {
-  const SummaryScreen({super.key});
+///
+/// Embedded as a tab of the Activity screen rather than pushed as its own
+/// route — history and summary are the same records at two zoom levels, and
+/// splitting them across a tab and a buried push made that hard to see.
+class SummaryView extends StatefulWidget {
+  const SummaryView({super.key});
 
   @override
-  State<SummaryScreen> createState() => _SummaryScreenState();
+  State<SummaryView> createState() => _SummaryViewState();
 }
 
-class _SummaryScreenState extends State<SummaryScreen> {
+class _SummaryViewState extends State<SummaryView> {
   late DateTime _month;
 
   @override
@@ -131,20 +135,17 @@ class _SummaryScreenState extends State<SummaryScreen> {
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Monthly Summary')),
-      body: Column(
-        children: [
-          _MonthPicker(
-            month: _month,
-            loading: provider.summaryLoading,
-            canGoForward: _canGoForward,
-            onPrev: () => _shiftMonth(-1),
-            onNext: () => _shiftMonth(1),
-          ),
-          Expanded(child: body),
-        ],
-      ),
+    return Column(
+      children: [
+        _MonthPicker(
+          month: _month,
+          loading: provider.summaryLoading,
+          canGoForward: _canGoForward,
+          onPrev: () => _shiftMonth(-1),
+          onNext: () => _shiftMonth(1),
+        ),
+        Expanded(child: body),
+      ],
     );
   }
 }

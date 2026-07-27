@@ -11,5 +11,5 @@ class ApiConfig {
   /// Base URL of the backend REST API (see docs/API_CONTRACT.md).
   /// Defaults to local dev; production web builds pass `API_BASE_URL=/api/v1`.
   static String get baseUrl =>
-      _override.isNotEmpty ? _override : 'http://localhost:5000/api/v1';
+      _override.isNotEmpty ? _override : 'https://attendance-api.nexserve.tech/api/v1';
 }
